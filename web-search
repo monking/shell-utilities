@@ -1,0 +1,100 @@
+#!/bin/bash
+
+E_NOENGINE=1
+E_INPUT=2
+
+SCRIPT_NAME="web-search"
+AVAILABLE_SEARCH_ENGINES=(
+  duckduckgo
+  google
+  wikipedia
+  etymonline
+)
+DEFAULT_ENGINE=duckduckgo
+
+showHelp() {
+	echo "USAGE web-search [-e ENGINE] QUERY"
+	echo ""
+	echo "OPTIONS"
+	echo "  -e ENGINE  Choose the search engine; default: '$DEFAULT_ENGINE', options: ${AVAILABLE_SEARCH_ENGINES[*]}."
+	echo "  -h         Show this help."
+}
+
+selectedEngine=
+while getopts 'e:' flag; do
+  case $flag in
+    e) selectedEngine="$OPTARG";;
+    h) showHelp &>2; exit 0;;
+  esac
+done
+shift $(( OPTIND - 1 ))
+
+if [[ -z $selectedEngine ]]; then
+	invokedName="$(basename "$0")"
+
+	if [[ $invokedName != $SCRIPT_NAME ]]; then
+		selectedEngine="$invokedName"
+	else
+		selectedEngine="$DEFAULT_ENGINE"
+	fi
+fi
+
+matchingEngines=()
+for engine in "${AVAILABLE_SEARCH_ENGINES[@]}"; do
+  if [[ $selectedEngine = $engine ]]; then
+    matchingEngines+=($engine)
+    break
+  elif [[ $engine =~ $selectedEngine ]]; then
+    matchingEngines+=($engine)
+  fi
+done
+
+if [[ ${#matchingEngines[@]} -eq 1 ]]; then
+  engine="${matchingEngines[0]}"
+elif [[ ${#matchingEngines[@]} -gt 1 ]]; then
+  echo "Multiple matching search engines for input '$selectedEngine': ${matchingEngines[*]}" >&2
+  exit $E_INPUT
+elif [[ ${#matchingEngines[@]} -eq 0 ]]; then
+  echo "No matching search engine for input '$selectedEngine'." >&2
+  exit $E_NOENGINE
+fi
+
+url=
+getEncodedQuery() {
+  {
+    if [[ -n "$1" ]]; then
+      echo -n "$*"
+    elif [[ ! -t 0 ]]; then
+      cat
+    fi
+  } | encodeURIComponent
+}
+case $engine in
+  duckduckgo)
+    url="https://duckduckgo.com/?q=$(getEncodedQuery "$@")"
+    ;;
+  google)
+    btn_param="&btnG=Google+Search"
+    if [[ $1 = lucky ]]; then
+      shift 1
+      btn_param="&btnI"
+    fi
+    url="https://www.google.com/search?ie=ISO-8859-1&hl=en&source=hp&q=$(getEncodedQuery "$@")${btn_param}&gbv=1"
+    ;;
+  wikipedia) # {#01iDtAu}
+    # url="https://en.wikipedia.org/w/?search=$(getEncodedQuery "$@")&go=Go"
+    url="https://en.wikipedia.org/w/index.php?title=Special:Search&search=$(getEncodedQuery "$@")"
+    ;;
+  etymonline) # {#01iDt7w}
+    url="https://www.etymonline.com/search?q=$(getEncodedQuery "$@")&source=ds_search"
+    ;;
+esac
+
+lynxArgs=()
+# {:01i6yz6} I don't know why this isn't working.
+[[ -t 1 ]] || lynxArgs+=(-dump)
+lynxArgs+=("$url")
+lynx "${lynxArgs[@]}"
+
+# {:01iDt7w} ```html\n<script data-react-helmet="true" type="application/ld+json">\n	"@context": "http://schema.org",\n	"@type": "WebSite",\n	"url": "https://www.etymonline.com/",\n	"potentialAction": {\n			"@type": "SearchAction",\n			"target": "https://www.etymonline.com/search?q={search_term_string}&source=ds_search",\n			"query-input": "required name=search_term_string"\n	}\n</script>\n```
+# {:01iDtAu} https://en.wikipedia.org\n```html\n<link rel="search" type="application/opensearchdescription+xml" href="/w/opensearch_desc.php" title="Wikipedia (en)"/>\n```\n\nhttps://en.wikipedia.org/w/opensearch_desc.php\n```\nhttps://en.wikipedia.org/w/index.php?title=Special:Search&amp;search={searchTerms}\n```

@@ -1,0 +1,136 @@
+#!/bin/bash
+
+E_NOPLAYERAPP=1
+E_NOMEDIA=2
+
+shout() {
+	1>&2 echo "$@"
+}
+whisper() {
+	[[ $verbose == true ]] && shout "$@"
+}
+confirm() {
+  local REPLY
+  read -n1 -p "$@ (Y/n): "
+  [[ -n $REPLY ]] && shout # newline
+  [[ $REPLY =~ ^[Yy]*$ ]]
+}
+showHelp() {
+	shout -e "Stream media using youtube-dl.\n"
+	shout "OPTIONS:"
+	shout "  -a  Request audio only. If downloading, convert to Ogg/Vorbis (.ogg)."
+	shout "  -d  Download."
+	shout "  -D  Omit default mplayer settings, like scaletempo, ontop, dimsensions."
+	shout "  -h  Show this help."
+	shout "  -j  Output media info as JSON."
+	shout "  -v  Verbose output."
+}
+
+g_yt_options=()
+g_player_options=()
+
+# g_player_app=mplayer
+g_player_app=mpv
+# command -v $g_player_app &>/dev/null || g_player_app=mpv
+command -v $g_player_app &>/dev/null || {
+  shout "Expecting either mplayer or mpv to be installed."
+  exit $E_NOPLAYERAPP
+}
+
+while getopts 'adDhjv' flag; do
+	case $flag in
+		a) audioOnly=true;;
+		d) download=true;;
+		D) omit_default_player_options=true;;
+		h) showHelp; exit 0;;
+		j) getJSONData=true;;
+		v) verbose=true;;
+	esac
+done
+[[ $OPTIND -gt 1 ]] && shift $((OPTIND-1))
+
+if [[ $omit_default_player_options != true ]]; then
+  g_player_options+=(-af scaletempo=stride=15:overlap=1:search=15)
+  if [[ $g_player_app = mplayer ]]; then
+    g_player_options+=(-ontop -xy 300 -geometry 100%:100% -hardframedrop)
+  fi
+fi
+
+if [[ $showHelp = true ]]; then
+	exit 0
+fi
+
+yt-stream() {
+  local youtube_id_or_url youtube_id fifo_path yt_pid
+
+  youtube_id_or_url=$1
+	youtube_id=$(echo -n $youtube_id_or_url | perl -pe 's/^(https?:\/\/)?(youtu\.be\/|.*v=)([^&]+).*/\3/')
+  shift 1
+
+  if [[ $youtube_id = $youtube_id_or_url ]]; then # it's not a YouTube ID
+    tmp_filename="yts-$(echo -n "$youtube_id" | perl -pe 's/[^a-zA-Z0-9_.-]+/_/g')"
+  else
+    tmp_filename="yts-$youtube_id"
+  fi
+
+	# setup
+  [[ ! -d "$TMPDIR" ]] && TMPDIR=/tmp/
+  fifo_path="$TMPDIR/$tmp_filename"
+  whisper mkfifo "$fifo_path"
+  mkfifo "$fifo_path"
+
+	# download
+	g_yt_options+=(-o - -- $youtube_id)
+  whisper "youtube-dl ${g_yt_options[@]} > $fifo_path"
+  youtube-dl "${g_yt_options[@]}" > $fifo_path 2>/dev/null &
+  yt_pid=$!
+
+	# play
+  g_player_options+=("$@")
+	whisper "$g_player_app ${g_player_options[@]} $fifo_path"
+  $g_player_app "${g_player_options[@]}" $fifo_path
+
+	# clean up
+	whisper "kill $yt_pid"
+  kill $yt_pid
+	whisper "rm $fifo_path"
+  rm $fifo_path
+}
+
+args=("$@")
+if [[ -z ${args[@]} ]] && command -v pbpaste &>/dev/null; then
+  args=("$(pbpaste)")
+  if [[ -n "${args[@]}" ]]; then
+    confirm "Use pasteboard (${args[*]}?" || args=()
+  fi
+fi
+
+if [[ -z ${args[@]} ]]; then
+  shout "No YouTube ID or URL given."
+  showHelp
+  exit $E_NOMEDIA
+fi
+
+
+if [[ $download = true ]]; then
+	g_yt_options+=(--exec "folder=$(basename $(pwd)); folder=${folder// /_}; echo {} >> $folder.m3u8; echo {}")
+	if [[ $audioOnly = true ]]; then
+		g_yt_options+=(-f bestaudio --extract-audio --audio-format vorbis)
+		youtube-dl "${g_yt_options[@]}" "${args[@]}"
+	else
+		youtube-dl "${args[@]}"
+	fi
+elif [[ $getJSONData = true ]]; then
+	if [[ -t 1 ]]; then # interactive: give nice output
+		youtube-dl -j -- "${args[1]}" | json | less
+	else # raw output
+		youtube-dl -j -- "${args[1]}"
+	fi
+else
+	if [[ $audioOnly = true ]]; then
+		g_yt_options+=(-f bestaudio)
+		# g_player_options+=(-novideo) # mplayer
+		g_player_options+=(--vid=no) # mpv
+	fi
+	yt-stream "${args[@]}"
+fi

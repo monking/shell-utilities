@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# --no-renames: does this cause larger diffs, because a rename is treated more like a mode change, not a code change?
+diff_reference=$1
+if [[ -z $diff_reference ]]; then
+	remote=origin
+	if [[ -z $(git remote | grep "\<$remote\>") ]]; then
+		remote=$(git branch -vv | grep '^\*' | perl -pe 's;^.* \[([^/]+).*;\1;')
+		if [[ $remote =~ ^\* ]]; then # no upstream branch found
+			remote=""
+		fi
+	fi
+	if [[ -n $remote ]]; then
+		remote_head_branch=develop
+		if [[ -z $(git branch | grep "\<$remote_head_branch\>") ]]; then
+			remote_head_branch=$(git remote show $remote | grep 'HEAD branch' | perl -pe 's/^\s*HEAD branch:\s*//')
+		fi
+		if [[ -n $remote_head_branch ]]; then
+			diff_reference=$remote/$remote_head_branch
+		fi
+	fi
+fi
+# 01ij0zw todo: don't open up less if the grep reveals nothing
+if [[ -n $diff_reference ]]; then
+	git diff -U0 $diff_reference | grep '^+++\|^+.*\(FIXME\|XXX\|TODO\)' | perl -pe 's/^\++( b\/)?//'| grep -B 1 --color=always 'FIXME\|XXX\|TODO' | less -RS
+else
+	git grep --color=always -n '\(FIXME\|XXX\|TODO\)' | less -RS
+fi

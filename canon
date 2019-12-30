@@ -1,0 +1,30 @@
+#!/bin/bash
+
+## find the full path of a file or directory, following all symlinks
+cwd="$PWD"
+for targetFile in "$@"; do
+	cd "$cwd"
+	cd "$(dirname "$targetFile")"
+	targetFile="$(basename "$targetFile")"
+
+	# Iterate down a (possible) chain of symlinks
+	while [ -L "$targetFile" ]
+	do
+		targetFile="$(readlink "$targetFile")"
+		cd "$(dirname "$targetFile")"
+		targetFile="$(basename "$targetFile")"
+	done
+
+	# Compute the canonicalized name by finding the physical path
+	# for the directory we're in and appending the target file.
+	physDir="$(pwd -P)"
+	result=$physDir/
+	if [ ! "$targetFile" = "." ]; then
+		result="$result$targetFile"
+	fi
+	if [ -t 1 ]; then
+		echo "$result"
+	else
+		printf "$result"
+	fi
+done

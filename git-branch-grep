@@ -1,0 +1,118 @@
+#!/bin/bash
+
+verbose=false
+
+feedback() {
+	1>&2 echo "$@"
+}
+whisper() {
+	[[ $verbose = true ]] && feedback "$@"
+}
+newline() {
+	feedback ""
+}
+
+showHelp() {
+	feedback "USAGE: git-branch-grep [OPTIONS] [SEARCH]"
+	feedback "  SEARCH  A substring of the branch name, or if that doesn't match, it any branch containing the SEARCH characters in the given order will match (e.g. '1234j' will match 'feature/1234_minify_javascript'."
+	feedback "  -c      Checkout the branch, if there is only one match. (TODO: prompt to select if there is more than 1 match)"
+	feedback "  -l      Restrict your search to local branches. By default local branches are searched first, and then all branches on remotes (still stored locally, from the last 'git remote update')"
+	feedback "  -r      Treat the SEARCH as a regular expression."
+	feedback "  -u      Update branch data (by doing 'git fetch origin')."
+	feedback "  -v      Show verbose output."
+	feedback -e "\n  Precedence of searches is: 1) literal match for substring SEARCH, 2) match for '-r' pattern, 3) match for SEARCH exploded as a regular expression (e.g. '1234' becomes '1.*2.*3.*4'."
+}
+
+checkout=false
+localOnly=false
+useTokenAsRegExpPattern=false
+while getopts 'chlruv' flag; do
+	case $flag in
+		c) checkout=true; whisper "checkout";;
+		h) showHelp; exit 0;;
+		l) localOnly=true; whisper "local only";;
+		r) useTokenAsRegExpPattern=true; whisper "pattern";;
+		u) whisper "fetch"; git fetch origin;;
+		v) verbose=true; whisper "verbose";;
+	esac
+done
+shift $((OPTIND - 1))
+
+initialSearchToken="$*"
+
+global_branches=()
+
+# USAGE: searchBranches [OPTIONS] SEARCH [GIT OPTIONS]
+searchBranches() {
+	whisper "searchBranches $*"
+	whisper "  STARTING with ${#global_branches[@]} branches found"
+	local flag OPTIND OPTARG
+
+	local shouldExplode=false
+	local useAsPattern=false
+
+	while getopts 'xr' flag; do
+		case $flag in
+			x) shouldExplode=true;;
+			r) useAsPattern=true;;
+		esac
+	done
+	shift $((OPTIND - 1))
+
+	local searchToken="$1"
+	shift 1
+
+	local gitOptions=()
+	[[ $# -gt 0 ]] && gitOptions+=("$@")
+
+	local branchesToSearch="$(git branch "${gitOptions[@]}" | perl -pe 's#^[\*\s]*(remotes/[^/]+/)?##')"
+
+	local grepOptions=()
+	if $shouldExplode; then
+		searchToken="$(echo -n "$searchToken" | perl -pe 's/\s+//g' | perl -pe 's/(.)/.*\1/g')"
+	elif ! $useAsPattern; then
+		grepOptions+=(--fixed-strings)
+	fi
+
+	grepOptions+=("$searchToken")
+	whisper "  grepOptions: ${grepOptions[*]}"
+
+	global_branches=($(echo -e "$branchesToSearch" | grep "${grepOptions[@]}" | sort | uniq))
+
+	whisper "  ENDING with ${#global_branches[@]} branches found"
+
+	[[ ${#global_branches[@]} -gt 0 ]]
+}
+
+commonSearchOptions=()
+[[ $useTokenAsRegExpPattern = true ]] && commonSearchOptions+=(-r)
+
+searchBranches "${commonSearchOptions[@]}" "$initialSearchToken" || # local, exact
+{
+	[[ $localOnly != true ]] &&
+		searchBranches "${commonSearchOptions[@]}" "$initialSearchToken" -a # all, exact
+} ||
+{
+	[[ $useTokenAsRegExpPattern != true ]] && {
+		# commonSearchOptions will always be empty in here. Leaving it in place for consistency
+		searchBranches -x "${commonSearchOptions[@]}" "$initialSearchToken" || # local, exploded
+		{
+			[[ $localOnly != true ]] &&
+				searchBranches -x "${commonSearchOptions[@]}" "$initialSearchToken" -a
+		}
+	}
+}
+
+if [[ ${#global_branches[@]} -eq 1 ]]; then
+	echo -n ${global_branches[0]}
+	newline
+
+	[[ $checkout = true ]] && git checkout "${global_branches[0]}"
+elif [[ ${#global_branches[@]} -gt 1 ]]; then
+	feedback "Pattern \"$initialSearchToken\" matched multiple branches:"
+	for branch in ${global_branches[@]}; do
+		feedback $branch
+	done
+else
+	feedback "No branch found by pattern \"$*\"."
+fi
