@@ -1,0 +1,10 @@
+- `canon`: recursively resolve any symlinks to get the "canonical" path
+- `git-branch-grep`: grep branches, returns the best match, or gives feedback when it fails
+- `git-todo`: search for _new_ notes in source code (compared with a "main" git branch)
+- `youtube-playlist-sync`: automate `youtube-dl` to mirror a YouTube playlist as a `.m3u8` file
+- `yt`: stream or download using `youtube-dl`
+- `web-search`: search a few preset sites using the `lynx` command-line browser
+	- `web-search` <- `duck`: search duckduckgo.com
+	- `web-search` <- `etym`: search etymonline.com
+	- `web-search` <- `goog`: search google.com
+	- `web-search` <- `wiki`: search en.wikipedia.org
