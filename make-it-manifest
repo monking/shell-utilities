@@ -1,0 +1,95 @@
+#!/bin/bash
+
+FILE_DEFAULT="manifest.txt"
+
+showHelp() {
+  {
+    echo "Save the output of tree, tab-indented, to a $FILE_DEFAULT file.."
+    echo "USAGE: make-it-manifest [OPTIONS]"
+    echo "OPTIONS:"
+    echo " -a      Include hidden files (i.e. file/directory names beginning with '.'."
+    echo " -e      Open the manifest file EDITOR (set environment variable to configure). This option is ignored if you specify -f -, for output to stdout."
+    echo " -d DIR  Specify the directory of which to make a manifest. This defaults to PWD."
+    echo " -D      Debug mode."
+    echo " -g      Note the commit hash of any git repositories."
+    echo " -G      Recurse into Git repositories. By default the contents of git repositories is ignored."
+    echo " -l      Follow symlinks."
+    echo " -m      Include the MD5 sum for each file in the output manifest."
+    echo " -o FILE Specify the manifest file location. By default, it's DIR/$FILE_DEFAULT. If '-' is given, the manifest is output to stdout, and not saved to disk."
+    echo " -h      Show this help."
+    echo " -t      Append a timestamp to the manifest filename. It is assumed that the file has extention .txt, and this option will fail if you specify a different extension. This option is ignored if you specify -f -, for output to stdout."
+    echo ""
+    echo "The manifest will be opened in an editor (value of EDITOR environment variable"
+  } >&2
+}
+
+generateManifest() {
+  local fullPath="$(cd "$1"; pwd)"
+  [[ -n $TENT_HOSTNAME ]] && HOSTNAME="$TENT_HOSTNAME"
+  echo "$HOSTNAME:$fullPath"
+  [[ -n $2 ]] && echo "manifest captured: $2" # timestamp, or other information
+  local includeMD5=$3
+  (
+    cd "$fullPath"
+    {
+      treeCommand=(tree-tab)
+      [[ $debug = true ]] && treeCommand+=(-D)
+      [[ $includeMD5 = true ]] && treeCommand+=(-e "[[ -f \"{}\" ]] && md5sum \"{}\" | awk '{print \$1;}'")
+      [[ $followSymlinks = true ]] && treeCommand+=(-l)
+      [[ $includeHiddenFiles = true ]] && treeCommand+=(-a)
+      [[ $recurseIntoGitRepositories != true ]] && treeCommand+=(--ignore-path '\.git/.+') # ignore files within a git repository, list the repository root directory
+      [[ $noteGitRevision = true ]] && treeCommand+=(-e '[[ "{}" =~ \.git$ ]] && echo -n "commit:$(cd "{}" && git rev-parse HEAD)"')
+      "${treeCommand[@]}"
+    } |
+      grep -v '^\.$' # leave off top dir path, our own header serves that need
+  )
+}
+
+editFile() {
+  "$EDITOR" -s <(echo -e ":set fdm=indent\n") "$1"
+}
+
+editAfter=false
+computeMD5PerFile=false
+debug=false
+dir="$PWD"
+file="$FILE_DEFAULT"
+timestamp="$(TZ=UTC date '+%Y%m%dT%H%M%SZ')"
+includeDotFiles=false
+noteGitRevision=false
+recurseIntoGitRepositories=false
+followSymlinks=false
+while getopts ad:DegGhlmo:t flag; do
+  case $flag in
+    a) includeDotFiles=true;;
+    d) dir="$OPTARG";;
+    D) debug=true;;
+    e) editAfter=true;;
+    g) noteGitRevision=true;;
+    G) recurseIntoGitRepositories=true;;
+    h) showHelp; exit 0;;
+    l) followSymlinks=true;;
+    m) computeMD5PerFile=true;;
+    o) file="$OPTARG";;
+    t) file="${file/.txt/.$timestamp.txt}";;
+  esac
+done
+
+{
+  genManCommand=(generateManifest "$dir" "$timestamp" $computeMD5PerFile)
+  if [[ $file != '-' ]]; then # write to disk, and optionally edit
+    echo "Generating manifest in file $file" >&2
+    "${genManCommand[@]}" > "$file" &&
+      [[ $editAfter = true ]] &&
+      editFile "$file"
+  elif $editAfter; then # stdout + edit
+    echo "Generating manifest in file $file" >&2
+    echo "Will open in editor afterwards." >&2
+    "${genManCommand[@]}" | editFile "$file"
+  else # stdout
+    "${genManCommand[@]}"
+  fi
+}
+
+# TODO
+# {:01ikwAR} option to record files' modified time in the manifest

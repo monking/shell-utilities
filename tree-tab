@@ -1,0 +1,159 @@
+#!/bin/bash
+
+showHelp() {
+  echo "\
+OPTIONS:
+  -D                     Show debug messages.
+  -e EXPRESSION          Evaluate a shell expression and print its output after ' :: ' for every line.
+  --ignore-path PATTERN  Ignore paths matching the given regular expression PATTERN (using grep -E, extended Regular Expressions).
+  -h                     Show this help.
+"
+  #--limit NUMBER         Consider only NUMBER lines. Ignored lines still count toward the total.
+}
+
+joinArray() {
+  local delimiter="$1"
+  shift 1
+
+  local i
+  local output=
+  local isFirst=true
+
+  for i in "$@"; do
+    if [[ $isFirst = true ]]; then
+      isFirst=false
+    else
+      output+="$delimiter"
+    fi
+    output+="$i"
+  done
+  echo -n "$output"
+}
+
+generateTree() {
+  tree "$@" | perl -pe 's/(├── |│   |└── |    )/\t/g'
+}
+
+evalPerFile() {
+  local expr="$1"
+  local skipLineOnError="$2"
+  local suppressOutput="$3"
+  local skipChildren="$4"
+  local numTabs=0
+  local previousNumTabs line path lineChunks depthDiff pathPopCount lineName tabs lineBeginning escapedPath exprCommand exprOutput exprStatus
+  local pathChunks=()
+  # local lineNumber=0
+  local skippingIndent=
+
+  # echo "# WARNING: -e is not fully tested; evaluating per line: '$expr'" # testing is successful so far
+
+  # local oIFS="$IFS"
+  local IFS=$'\n'
+  while read line; do
+    # IFS="$oIFS"
+    if [[ -z $line || $line =~ ^# || $line =~ ^[0-9]+\ directories,\ [0-9]+\ files$ ]]; then
+      echo "$line" # pass through comments & blank lines
+    else
+      if [[ -n $skippingIndent ]]; then
+        lineBeginning=${line:0:${#skippingIndent}}
+        if [[ $lineBeginning = $skippingIndent ]]; then
+          continue
+        else
+          skippingIndent= # stop skipping until next match
+        fi
+      fi
+
+      # if [[ $limit -gt 0 ]]; then
+      #   lineNumber=$((lineNumber + 1)); [[ $lineNumber -gt $limit ]] && break
+      # fi
+
+      previousNumTabs="$numTabs"
+
+      # tabs="$(echo -n "$line" | perl -pe 's/^(\t*).*/\1/')"
+      # lineName="${line:${#tabs}}" # remove leading tabs
+
+      lineName="${line#"${line%%[![:space:]]*}"}" # remove leading whitespace # https://stackoverflow.com/a/3352015/278478
+      #               ^                         | remove from beginning
+      #                ^                      ^ | quote?
+      #                       ^^                | remove from end
+      #                         ^^         ^    | invert the inner character class
+      #                           ^^^^^^^^^     | whitespace character class
+      #                                     ^   | any non-whitespace characters
+      tabs="${line/$lineName/}"
+
+      numTabs=${#tabs}
+
+      depthDiff=$((numTabs - previousNumTabs))
+      if [[ $depthDiff -lt 1 ]]; then
+        pathChunks=("${pathChunks[@]:0:$numTabs}")
+      fi
+      pathChunks+=("$lineName")
+      path="$(joinArray '/' "${pathChunks[@]}")"
+
+      escapedPath="${path//:/\\:}"
+      exprCommand="$(echo -n "$expr" | perl -pe "s:\{\}:$escapedPath:g")"
+      exprOutput="$(eval "$exprCommand")"
+      exprStatus=$?
+      [[ $debug = true ]] && echo "# expr ($exprCommand) #$exprStatus" >&2
+
+      if [[ -n "$skipLineOnError" && $exprStatus != 0 ]]; then
+        [[ -n $skipChildren ]] && skippingIndent="$tabs"
+      else
+        echo -n "$line"
+
+        if [[ -z $suppressOutput && -n "$exprOutput" ]]; then
+          echo -n " :: $exprOutput"
+        fi
+
+        echo "" # newline
+      fi
+      [[ $debug = true ]] && echo "# $depthDiff => ${numTabs} | '$path' (esc '$escapedPath')" >&2
+    fi
+    # IFS=$'\n'
+  done
+}
+
+inputArgs=("$@")
+args=()
+debug=false
+skipArg=false
+perFileOutputExpressions=()
+perFileFilterExpressions=()
+argIndex=-1
+# limit=0
+for arg in "$@"; do
+  [[ $debug = true ]] && echo "# arg '$arg'" >&2
+  argIndex=$((argIndex + 1))
+  [[ $skipArg = true ]] && { skipArg=false; continue; }
+  case "$arg" in 
+    '-e') perFileOutputExpressions+=("${inputArgs[$((argIndex + 1))]}"); skipArg=true;;
+    '--ignore-path') perFileFilterExpressions+=("${inputArgs[$((argIndex + 1))]}"); skipArg=true;;
+    '-h') showHelp; exit 0;;
+    '-D') debug=true; echo "# DEBUG: ON" >&2;;
+    # '--limit') limit="${inputArgs[$((argIndex + 1))]}"; skipArg=true; echo "limit: $limit" >&2;;
+    *) args+=("$arg");;
+  esac
+done
+[[ $debug = true ]] && echo "# tree args: '${args[*]}'" >&2
+
+# [[ $debug = true ]] && echo "# limit: $limit" >&2
+
+generateTreePipeline=("generateTree \"\${args[@]}\"")
+
+concatFilters=
+if [[ ${#perFileFilterExpressions[@]} -gt 0 ]]; then
+  concatFilters="echo -n \"{}\" | grep -vE \"$(joinArray "\n" "${perFileFilterExpressions[@]}")\""
+  [[ $debug = true ]] && echo "# DEBUG: concatFilters: $concatFilters" >&2
+  generateTreePipeline+=("evalPerFile \"\$concatFilters\" skipLineOnError suppressOutput skipChildren") # values 2-4 are not read; written out for clarity
+fi
+
+concatPerFileExpressions=
+if [[ ${#perFileOutputExpressions[@]} -gt 0 ]]; then
+  concatPerFileExpressions="$(joinArray "; " "${perFileOutputExpressions[@]}")"
+  [[ $debug = true ]] && echo "# DEBUG: concatPerFileExpressions: $concatPerFileExpressions" >&2
+  generateTreePipeline+=("evalPerFile \"\$concatPerFileExpressions\"")
+fi
+
+generateTreeCommand="$(joinArray " | " "${generateTreePipeline[@]}")"
+[[ $debug = true ]] && echo "# DEBUG pipeline: ($generateTreeCommand)" >&2
+eval "$generateTreeCommand"
