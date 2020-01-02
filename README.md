@@ -1,6 +1,8 @@
 - `canon`: recursively resolve any symlinks to get the "canonical" path
 - `git-branch-grep`: grep branches, returns the best match, or gives feedback when it fails
 - `git-todo`: search for _new_ notes in source code (compared with a "main" git branch)
+- `make-it-manifest`: generate a list of all files in a directory, optionally with MD5 sums and Git commit hashes
+- `tree-tab`: transform `tree` output to tab-indented list
 - `youtube-playlist-sync`: automate `youtube-dl` to mirror a YouTube playlist as a `.m3u8` file
 - `yt`: stream or download using `youtube-dl`
 - `web-search`: search a few preset sites using the `lynx` command-line browser
