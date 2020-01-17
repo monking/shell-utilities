@@ -21,10 +21,10 @@ showHelp() {
 }
 
 selectedEngine=
-while getopts 'e:' flag; do
+while getopts 'e:h' flag; do
   case $flag in
     e) selectedEngine="$OPTARG";;
-    h) showHelp &>2; exit 0;;
+    h) showHelp; exit 0;;
   esac
 done
 shift $(( OPTIND - 1 ))
