@@ -18,6 +18,8 @@ showHelp() {
 	echo "OPTIONS"
 	echo "  -e ENGINE  Choose the search engine; default: '$DEFAULT_ENGINE', options: ${AVAILABLE_SEARCH_ENGINES[*]}."
 	echo "  -h         Show this help."
+	echo ""
+	echo "NOTE: If you symlink this script, the name of that symlink will be used as the value for -e."
 }
 
 selectedEngine=
