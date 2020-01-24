@@ -1,12 +1,13 @@
 - `canon`: recursively resolve any symlinks to get the "canonical" path
 - `git-branch-grep`: grep branches, returns the best match, or gives feedback when it fails
+- `git-bundle-helper`: a somewhat outdated helper to create git bundles, and optionally encrypt them with `bcrypt` (the outdated part).
 - `git-todo`: search for _new_ notes in source code (compared with a "main" git branch)
 - `make-it-manifest`: generate a list of all files in a directory, optionally with MD5 sums and Git commit hashes
 - `tree-tab`: transform `tree` output to tab-indented list
+- `web-search`: search a few preset sites using the `lynx` command-line browser
+	- `duck` -> `web-search`: search duckduckgo.com
+	- `etym` -> `web-search`: search etymonline.com
+	- `goog` -> `web-search`: search google.com
+	- `wiki` -> `web-search`: search en.wikipedia.org
 - `youtube-playlist-sync`: automate `youtube-dl` to mirror a YouTube playlist as a `.m3u8` file
 - `yt`: stream or download using `youtube-dl`
-- `web-search`: search a few preset sites using the `lynx` command-line browser
-	- `web-search` <- `duck`: search duckduckgo.com
-	- `web-search` <- `etym`: search etymonline.com
-	- `web-search` <- `goog`: search google.com
-	- `web-search` <- `wiki`: search en.wikipedia.org
