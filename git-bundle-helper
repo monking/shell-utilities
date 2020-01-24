@@ -1,0 +1,113 @@
+#!/bin/bash
+
+function cd_to_git_root() {
+	cd "$(canon .)" # $TENTDIR/bin/canon
+	cd "$(git rev-parse --show-cdup)"
+}
+
+# note the current working directory
+cwd="$(pwd)"
+
+# get flags
+while getopts 'eh' flag; do
+	case $flag in
+		e) encrypt=true;;
+		h) help=true;;
+	esac
+done; shift $(( OPTIND - 1 ))
+
+# show help
+if [[ $help = true ]]; then
+	echo "\
+USAGE: gb [-eh] [fetch | pull | clone] [<bundle_path>|<bundle_dir>] [<other_git_arguments>]]
+	-e encrypt using bcrypt
+	-h show this help
+
+EXAMPLES:
+gb clone ~/Dropbox/work.git.bundle.bfe ~/work
+gb pull ~/Dropbox/work.git.bundle.bfe
+gb -e #creates a bundle in GIT_BUNDLE_DIR ($GIT_BUNDLE_DIR)
+
+BUGS:
+- Currently only works with remotes accessible on the same file system (no SSH).
+"
+	return
+fi
+
+# if the first argument is not a file or directory, consider it a git command and take it out of the argument list.
+if [[ ! -a "$1" ]]; then
+	git_command=$1
+	shift 1
+fi
+
+# digest arguments
+remote="$1"
+shift 1
+git_args=($@)
+
+# if no remote is specified, assume GIT_BUNDLE_DIR, or HOME
+if [[ -z $remote ]]; then
+	[[ -d "$GIT_BUNDLE_DIR" ]] && remote="$GIT_BUNDLE_DIR" || remote="$HOME"
+fi
+
+# we need to figure out the name of our remote, based on git working directory's name
+if [[ -d "$remote" ]]; then
+	cd_to_git_root
+	if [[ ! -e .git ]]; then
+		echo "git $git_command must be run from a git working tree"
+		return 1
+	fi
+	working_dir_name=$(basename "$(pwd)")
+	cd "$cwd"
+	if [[ -d "$remote" ]]; then
+		bundle_name="$working_dir_name.git.bundle"
+		remote="$remote/$bundle_name"
+
+		# if an encrypted version already exists, use that
+		if [[ -f "$remote.bfe" ]]; then
+			remote="$remote.bfe"
+		fi
+	fi
+fi
+
+# handle any mismatch in .bfe and -e usage
+if [[ "$remote" =~ \.bfe$ ]]; then
+	if [[ $encrypt != true ]]; then
+		echo "The remote name ends in .bfe: encryption turned on."
+		encrypt=true
+	fi
+elif [[ $encrypt = true ]]; then
+	remote="$remote.bfe"
+fi
+
+# prepare to use a temporary, unencrypted remote
+if [[ $encrypt = true ]]; then
+	final_remote="$remote"
+	remote="/tmp/$(basename ${remote/.bfe})"
+fi
+
+if [[ -z $git_command ]]; then # no command, making a bundle
+	git_command="bundle create"
+	git_args+=(--all --tags)
+	writing=true
+elif [[ $encrypt = true ]]; then # decrypt ahead of the git operation
+	cp "$final_remote" "$remote.bfe"
+	bcrypt "$remote.bfe"
+fi
+
+# "we are gathered here today..."
+git $git_command "$remote" ${git_args[@]}
+
+# encrypt after the operation
+if [[ $encrypt = true ]]; then
+	if [[ $writing = true ]]; then
+		bcrypt "$remote"
+		mv "$remote.bfe" "$final_remote"
+	else
+		rm "$remote"
+	fi
+	remote="$final_remote"
+	unset final_remote
+fi
+
+echo "did: 'git $git_command' with '$remote'"
