@@ -4,7 +4,7 @@ showHelp() {
   echo "\
 OPTIONS:
   -D                     Show debug messages.
-  -e EXPRESSION          Evaluate a shell expression and print its output after ' :: ' for every line.
+  -e EXPRESSION          Evaluate a shell expression and print its output after ' :: ' for every line. Multiple allwed.
   --ignore-path PATTERN  Ignore paths matching the given regular expression PATTERN (using grep -E, extended Regular Expressions).
   -h                     Show this help.
 "
@@ -117,6 +117,7 @@ inputArgs=("$@")
 args=()
 debug=false
 skipArg=false
+followSymlink=false
 perFileOutputExpressions=()
 perFileFilterExpressions=()
 argIndex=-1
