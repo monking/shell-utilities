@@ -20,12 +20,12 @@ done; shift $(( OPTIND - 1 ))
 if [[ $help = true ]]; then
 	echo "\
 USAGE: gb [-eh] [fetch | pull | clone] [<bundle_path>|<bundle_dir>] [<other_git_arguments>]]
-	-e encrypt using bcrypt
+	-e encrypt using bcrypt (WARNING: bcrypt is outdated; better to not use this, and encrypt in a separate step)
 	-h show this help
 
 EXAMPLES:
-gb clone ~/Dropbox/work.git.bundle.bfe ~/work
-gb pull ~/Dropbox/work.git.bundle.bfe
+gb clone ~/Dropbox/work.bundle.bfe ~/work
+gb pull ~/Dropbox/work.bundle.bfe
 gb -e #creates a bundle in GIT_BUNDLE_DIR ($GIT_BUNDLE_DIR)
 
 BUGS:
@@ -60,7 +60,7 @@ if [[ -d "$remote" ]]; then
 	working_dir_name=$(basename "$(pwd)")
 	cd "$cwd"
 	if [[ -d "$remote" ]]; then
-		bundle_name="$working_dir_name.git.bundle"
+		bundle_name="$working_dir_name.bundle"
 		remote="$remote/$bundle_name"
 
 		# if an encrypted version already exists, use that
