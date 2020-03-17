@@ -34,11 +34,12 @@ generateManifest() {
     {
       treeCommand=(tree-tab)
       [[ $debug = true ]] && treeCommand+=(-D)
-      [[ $includeMD5 = true ]] && treeCommand+=(-e "[[ -f \"{}\" ]] && md5sum \"{}\" | awk '{print \$1;}'")
+      [[ $includeMD5 = true ]] && treeCommand+=(-e "[[ -f \"{}\" ]] && echo -n \"\$(md5sum \"{}\" | awk '{ print \$1 }')\"")
       [[ $followSymlinks = true ]] && treeCommand+=(-l -e "[[ -L \"{}\" ]] && { echo -n ' -> '; readlink \"{}\"; }")
       [[ $includeHiddenFiles = true ]] && treeCommand+=(-a)
       [[ $recurseIntoGitRepositories != true ]] && treeCommand+=(--ignore-path '\.git/.+') # ignore files within a git repository, list the repository root directory
-      [[ $noteGitRevision = true ]] && treeCommand+=(-e '[[ "{}" =~ \.git$ ]] && echo -n "commit:$(cd "{}" && git rev-parse HEAD)"')
+      [[ $noteGitRevision = true ]] && treeCommand+=(-e 'if [[ "{}" =~ \.git$ ]]; then echo -n "commit:$(cd "{}" && git rev-parse HEAD)"; elif [[ "{}" =~ bundle$ ]]; then echo -n "commit:$(git bundle list-heads "{}" | grep HEAD | awk "{ print \$1 }")"; fi')
+      # ^ {01jE9jA} not checking for ".bundle", because I used the extension `.git-bundle` for a long time, like a doofus
       "${treeCommand[@]}"
     } |
       grep -v '^\.$' # leave off top dir path, our own header serves that need

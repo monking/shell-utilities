@@ -4,7 +4,7 @@ showHelp() {
   echo "\
 OPTIONS:
   -D                     Show debug messages.
-  -e EXPRESSION          Evaluate a shell expression and print its output after ' :: ' for every line. Multiple allwed.
+  -e EXPRESSION          Evaluate a shell expression and print its output after ' :: ' for every line. Multiple allowed.
   --ignore-path PATTERN  Ignore paths matching the given regular expression PATTERN (using grep -E, extended Regular Expressions).
   -h                     Show this help.
 "
@@ -150,7 +150,7 @@ fi
 
 concatPerFileExpressions=
 if [[ ${#perFileOutputExpressions[@]} -gt 0 ]]; then
-  concatPerFileExpressions="$(joinArray "; " "${perFileOutputExpressions[@]}")"
+  concatPerFileExpressions="$(joinArray "&& echo -n ' :: ';" "${perFileOutputExpressions[@]}")"
   [[ $debug = true ]] && echo "# DEBUG: concatPerFileExpressions: $concatPerFileExpressions" >&2
   generateTreePipeline+=("evalPerFile \"\$concatPerFileExpressions\"")
 fi
