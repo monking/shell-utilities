@@ -33,6 +33,7 @@ generateManifest() {
     cd "$fullPath"
     {
       treeCommand=(tree-tab)
+      [[ $includeDotFiles = true ]] && treeCommand+=(-a)
       [[ $debug = true ]] && treeCommand+=(-D)
       [[ $includeMD5 = true ]] && treeCommand+=(-e "[[ -f \"{}\" ]] && echo -n \"\$(md5sum \"{}\" | awk '{ print \$1 }')\"")
       [[ $followSymlinks = true ]] && treeCommand+=(-l -e "[[ -L \"{}\" ]] && { echo -n ' -> '; readlink \"{}\"; }")
