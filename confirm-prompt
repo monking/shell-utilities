@@ -1,0 +1,108 @@
+#!/bin/bash
+
+showHelp() {
+  echo "-e  Like 'echo -e', parse special characters like '\\n'."
+  echo "-n  Use 'no' as the default response when the user enters an empty response."
+  echo "-1  Act as soon as the user enters 1 character."
+  echo "-h  Show this help."
+  echo "-o OPTION  Give other options besides Y or N (you may use multiple -o). The response code for these options is 2 + the index of the option (from 0), so choosing the first extra option would return 2, and the second would return 3."
+  echo "-O  Use only the options specified with -o."
+  echo "-r  Allow unrecognized input (exit 0), and echo the input to STDOUT. It's recommended to use this with -O."
+  echo "-t SECONDS  Timeout, same as bash read -t argument (do 'help read' in bash)."
+  echo "-X  Use 'no' as the default response when the user lets the prompt time out. Requires -t SECONDS option."
+}
+
+promptArgs=(-n)
+defaultResponse=yes
+timeoutDefaultResponse=
+timeoutDefaultOpposite=false
+newlineAfterResponse=false
+useOnlyMoreOptions=false
+forwardUnrecognizedInput=false
+readOptions=()
+moreUserOptions=()
+
+while getopts ehn1Oo:rt:X flag; do
+  case $flag in
+    e) promptArgs+=(-e);;
+    h) showHelp; exit 1;;
+    o) moreUserOptions+=("$OPTARG");;
+    O) useOnlyMoreOptions=true;;
+    n) defaultResponse=no;;
+    1) readOptions+=(-n1);newlineAfterResponse=true;;
+    r) forwardUnrecognizedInput=true;;
+    t) readOptions+=(-t "$OPTARG");; # TODO: communicate timeout in prmopt to user...
+    X) timeoutDefaultResponse=no;;
+  esac
+done
+[[ $OPTIND -gt 1 ]] && shift $((OPTIND-1))
+
+[[ -z $timeoutDefaultResponse ]] && timeoutDefaultResponse="$defaultResponse"
+
+shopt -s nocasematch # set case-insensitivity
+
+if [[ $useOnlyMoreOptions != true ]]; then
+  affirmativePattern='^([yY].*)?$'
+  negativePattern='^[nN]'
+  promptOptions='(Y/n)'
+  if [[ $defaultResponse = no ]]; then
+    affirmativePattern='^[yY]'
+    negativePattern='^([nN].*)?$'
+    promptOptions='(y/N)'
+  fi
+else
+  affirmativePattern=
+  negativePattern=
+  promptOptions='()'
+fi
+
+for option in "${moreUserOptions[@]}"; do
+  promptOptions="${promptOptions/)/\/${option})}"
+done
+
+echo "${promptArgs[@]}" "$1 $promptOptions: " >&2
+
+read "${readOptions[@]}"
+status=$?
+$newlineAfterResponse && echo -e "\n" >&2
+
+if [[ $status -gt 128 ]]; then
+  REPLY=$timeoutDefaultResponse
+fi
+
+if [[ -n $affirmativePattern && $REPLY =~ $affirmativePattern ]]; then
+  exit 0
+else
+  matchingOptionIndexes=()
+  matchingOptions=()
+  i=-1
+  for option in "${moreUserOptions[@]}"; do
+    let i++
+    if [[ $option =~ $REPLY ]]; then
+      matchingOptionIndexes+=($i)
+      matchingOptions+=($option)
+    fi
+  done
+
+  if [[ ${#matchingOptionIndexes[@]} -gt 0 ]]; then
+    if [[ ${#matchingOptionIndexes[@]} -eq 1 ]]; then
+      exit $(( 2 + ${matchingOptionIndexes[0]} ))
+    else
+      echo -n "Your response '$REPLY' matches multiple options: " >&2
+      separator=
+      for option in "${matchingOptions[@]}"; do
+        echo -n "${separator}${option}" >&2
+        separator=', '
+      done
+      echo "" >&2 # newline
+      exit 130
+    fi
+  elif [[ -n $negativePattern && $REPLY =~ $negativePattern ]]; then
+    exit 1
+  elif [[ $forwardUnrecognizedInput = true ]]; then
+    echo -n "$REPLY"
+    exit 0
+  else
+    exit 1
+  fi
+fi
