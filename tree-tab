@@ -8,6 +8,8 @@ OPTIONS:
   --ignore-path PATTERN  Ignore paths matching the given regular expression PATTERN (using grep -E, extended Regular Expressions).
   -h                     Show this help.
 "
+  echo ""
+  echo "Dependencies: tree, grep"
   #--limit NUMBER         Consider only NUMBER lines. Ignored lines still count toward the total.
 }
 
