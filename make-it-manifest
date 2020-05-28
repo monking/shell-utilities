@@ -13,6 +13,7 @@ showHelp() {
     echo " -D      Show debug messages."
     echo " -g      Note the commit hash of any git repositories."
     echo " -G      Recurse into Git repositories. By default the contents of git repositories is ignored."
+    echo " -N      Recurse into node_module directories, ignored by default."
     echo " -l      Follow symlinks."
     echo " -m      Include the MD5 sum for each file in the output manifest."
     echo " -o FILE Specify the manifest file location. By default, it's DIR/$FILE_DEFAULT. If '-' is given, the manifest is output to stdout, and not saved to disk."
@@ -41,6 +42,7 @@ generateManifest() {
       [[ $followSymlinks = true ]] && treeCommand+=(-l -e "[[ -L \"{}\" ]] && { echo -n ' -> '; readlink \"{}\"; }")
       [[ $includeHiddenFiles = true ]] && treeCommand+=(-a)
       [[ $recurseIntoGitRepositories != true ]] && treeCommand+=(--ignore-path '\.git/.+') # ignore files within a git repository, list the repository root directory
+      [[ $recurseIntoNodeModules != true ]] && treeCommand+=(--ignore-path 'node_modules/') # ignore files within a git repository, list the repository root directory
       [[ $noteGitRevision = true ]] && treeCommand+=(-e 'if [[ "{}" =~ \.git$ ]]; then echo -n "commit:$(cd "{}" && git rev-parse HEAD)"; elif [[ "{}" =~ \.bundle$ ]]; then echo -n "commit:$(git bundle list-heads "{}" | grep " HEAD\$" | awk "{ print \$1 }")"; fi')
       "${treeCommand[@]}"
     } |
@@ -61,6 +63,7 @@ timestamp="$(TZ=UTC date '+%Y%m%dT%H%M%SZ')"
 includeDotFiles=false
 noteGitRevision=false
 recurseIntoGitRepositories=false
+recurseIntoNodeModules=false
 followSymlinks=false
 while getopts ad:DegGhlmo:t flag; do
   case $flag in
@@ -70,6 +73,7 @@ while getopts ad:DegGhlmo:t flag; do
     e) editAfter=true;;
     g) noteGitRevision=true;;
     G) recurseIntoGitRepositories=true;;
+    N) recurseIntoNodeModules=true;;
     h) showHelp; exit 0;;
     l) followSymlinks=true;;
     m) computeMD5PerFile=true;;

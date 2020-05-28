@@ -75,11 +75,11 @@ evalPerFile() {
       # lineName="${line:${#tabs}}" # remove leading tabs
 
       lineName="${line#"${line%%[![:space:]]*}"}" # remove leading whitespace # https://stackoverflow.com/a/3352015/278478
-      #               ^                         | remove from beginning
-      #                ^                      ^ | quote?
-      #                       ^^                | remove from end
-      #                         ^^         ^    | invert the inner character class
-      #                           ^^^^^^^^^     | whitespace character class
+      #               ^'      ' ' '       ''' ' | remove from beginning
+      #                ^      ' ' '       ''' ^ | quote?
+      #                       ^^' '       '''   | remove from end
+      #                         ^^'       '^'   | invert the inner character class
+      #                           ^^^^^^^^^ '   | whitespace character class
       #                                     ^   | any non-whitespace characters
       tabs="${line/$lineName/}"
 
@@ -93,6 +93,7 @@ evalPerFile() {
       path="$(joinArray '/' "${pathChunks[@]}")"
 
       escapedPath="${path//:/\\:}"
+      escapedPath="${escapedPath//\$/\\\$}"
       exprCommand="$(echo -n "$expr" | perl -pe "s:\{\}:$escapedPath:g")"
       exprOutput="$(eval "$exprCommand")"
       exprStatus=$?
