@@ -20,9 +20,20 @@ if [[ -z $diff_reference ]]; then
 		fi
 	fi
 fi
-# 01ij0zw todo: don't open up less if the grep reveals nothing
-if [[ -n $diff_reference ]]; then
-	git diff -U0 $diff_reference | grep '^+++\|^+.*\(FIXME\|XXX\|TODO\)' | perl -pe 's/^\++( b\/)?//'| grep -B 1 --color=always 'FIXME\|XXX\|TODO' | less -RS
+
+findTodos() {
+  local rootGitDir="$(git up)"
+  [[ -n $rootGitDir ]] && cd "$rootGitDir"
+  if [[ -n $diff_reference ]]; then
+    git diff -U0 $diff_reference | grep '^+++\|^+.*\(FIXME\|XXX\|TODO\)' | perl -pe 's/^\++( b\/)?//'| grep -B 1 --color=always 'FIXME\|XXX\|TODO'
+  else
+    git grep -n --color=always -n '\(FIXME\|XXX\|TODO\)'
+  fi
+}
+
+if [[ -t 1 ]]; then
+  # findTodos | less -RS
+  findTodos | more
 else
-	git grep --color=always -n '\(FIXME\|XXX\|TODO\)' | less -RS
+  findTodos
 fi
