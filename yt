@@ -50,7 +50,7 @@ done
 [[ $OPTIND -gt 1 ]] && shift $((OPTIND-1))
 
 if [[ $omit_default_player_options != true ]]; then
-  g_player_options+=(-af scaletempo=stride=15:overlap=1:search=15)
+  g_player_options+=(--af=scaletempo=stride=15:overlap=1:search=15)
   if [[ $g_player_app = mplayer ]]; then
     g_player_options+=(-ontop -xy 300 -geometry 100%:100% -hardframedrop)
   fi
