@@ -4,7 +4,7 @@
 cwd="$PWD"
 for targetFile in "$@"; do
 	cd "$cwd"
-	cd "$(dirname "$targetFile")"
+	cd "$(dirname "$targetFile")" 2>/dev/null || continue
 	targetFile="$(basename "$targetFile")"
 
 	# Iterate down a (possible) chain of symlinks

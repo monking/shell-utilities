@@ -43,7 +43,7 @@ generateManifest() {
       [[ $includeHiddenFiles = true ]] && treeCommand+=(-a)
       [[ $recurseIntoGitRepositories != true ]] && treeCommand+=(--ignore-path '\.git/.+') # ignore files within a git repository, list the repository root directory
       [[ $recurseIntoNodeModules != true ]] && treeCommand+=(--ignore-path 'node_modules/') # ignore files within a git repository, list the repository root directory
-      [[ $noteGitRevision = true ]] && treeCommand+=(-e 'if [[ "{}" =~ \.git$ ]]; then echo -n "commit:$(cd "{}" && git rev-parse HEAD)"; elif [[ "{}" =~ \.bundle$ ]]; then echo -n "commit:$(git bundle list-heads "{}" | grep " HEAD\$" | awk "{ print \$1 }")"; fi')
+      [[ $noteGitRevision = true ]] && treeCommand+=(-e 'if [[ "{}" =~ \.git$ ]]; then echo -n "commit:$(cd "{}" && git rev-parse HEAD)"; elif [[ "{}" =~ \.bundle$ ]]; then echo -n "commit:$(git bundle list-heads "{}" | grep " HEAD\$" | awk "{ print \$1 }")"; fi') # {:01jjmnk} recurring error:<d:n/>```<d:n/>fatal: not a git repository (or any of the parent directories): .git<d:n/>```<d:n/>Oh, it [ ] might be a text `.git` file in a submodule, referring to its legit `.git` dir in `PARENT_GIT_WORKING_COPY/.git/modules/some-submodule/.git`<d:n/><d:n/>[ ] at least print out a path, rather thna the same exact error with no context.
       "${treeCommand[@]}"
     } |
       grep -v '^\.$' # leave off top dir path, our own header serves that need
