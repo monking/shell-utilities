@@ -3,10 +3,17 @@
 showHelp() {
   echo "\
 OPTIONS:
-  -D                     Show debug messages.
-  -e EXPRESSION          Evaluate a shell expression and print its output after ' :: ' for every line. Multiple allowed.
-  --ignore-path PATTERN  Ignore paths matching the given regular expression PATTERN (using grep -E, extended Regular Expressions).
-  -h                     Show this help.
+
+  -D     Show debug messages.
+
+  -e CMD Evaluate a shell command, replacing '{}' with the filename, and print
+         its output after ' :: ' for every line. Multiple allowed.
+
+  --ignore-path PATTERN
+         Ignore paths matching the given regular expression
+         PATTERN (using grep -E, extended Regular Expressions).
+
+  -h     Show this help.
 "
   echo ""
   echo "Dependencies: tree, grep"

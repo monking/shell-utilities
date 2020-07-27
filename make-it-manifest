@@ -2,13 +2,16 @@
 
 FILE_DEFAULT="manifest.txt"
 
+treeFurtherOptions=()
+
 showHelp() {
   {
     echo "Save the output of tree, tab-indented, to a $FILE_DEFAULT file.."
     echo "USAGE: make-it-manifest [OPTIONS]"
     echo "OPTIONS:"
     echo " -a      Include hidden files (i.e. file/directory names beginning with '.'."
-    echo " -e      Open the manifest file EDITOR (set environment variable to configure). This option is ignored if you specify -f -, for output to stdout."
+    echo " -e CMD  Run a command with '{}' replaced with filename, output of which is put on the line after the file (see tree-tab -e)."
+    echo " -E      Open the manifest file EDITOR (set environment variable to configure). This option is ignored if you specify -f -, for output to stdout."
     echo " -d DIR  Specify the directory of which to make a manifest. This defaults to PWD."
     echo " -D      Show debug messages."
     echo " -g      Note the commit hash of any git repositories."
@@ -44,6 +47,7 @@ generateManifest() {
       [[ $recurseIntoGitRepositories != true ]] && treeCommand+=(--ignore-path '\.git/.+') # ignore files within a git repository, list the repository root directory
       [[ $recurseIntoNodeModules != true ]] && treeCommand+=(--ignore-path 'node_modules/') # ignore files within a git repository, list the repository root directory
       [[ $noteGitRevision = true ]] && treeCommand+=(-e 'if [[ "{}" =~ \.git$ ]]; then echo -n "commit:$(cd "{}" && git rev-parse HEAD)"; elif [[ "{}" =~ \.bundle$ ]]; then echo -n "commit:$(git bundle list-heads "{}" | grep " HEAD\$" | awk "{ print \$1 }")"; fi') # {:01jjmnk} recurring error:<d:n/>```<d:n/>fatal: not a git repository (or any of the parent directories): .git<d:n/>```<d:n/>Oh, it [ ] might be a text `.git` file in a submodule, referring to its legit `.git` dir in `PARENT_GIT_WORKING_COPY/.git/modules/some-submodule/.git`<d:n/><d:n/>[ ] at least print out a path, rather thna the same exact error with no context.
+      [[ ${#treeFurtherOptions[@]} -gt 0 ]] && treeCommand+=("${treeFurtherOptions[@]}")
       "${treeCommand[@]}"
     } |
       grep -v '^\.$' # leave off top dir path, our own header serves that need
@@ -65,12 +69,13 @@ noteGitRevision=false
 recurseIntoGitRepositories=false
 recurseIntoNodeModules=false
 followSymlinks=false
-while getopts ad:DegGhlmo:t flag; do
+while getopts ad:De:EgGhlmo:t flag; do
   case $flag in
     a) includeDotFiles=true;;
     d) dir="$OPTARG";;
     D) debug=true;;
-    e) editAfter=true;;
+    e) treeFurtherOptions+=(-e "$OPTARG");;
+    E) editAfter=true;;
     g) noteGitRevision=true;;
     G) recurseIntoGitRepositories=true;;
     N) recurseIntoNodeModules=true;;
