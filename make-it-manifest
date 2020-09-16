@@ -19,6 +19,8 @@ showHelp() {
     echo " -N      Recurse into node_module directories, ignored by default."
     echo " -l      Follow symlinks."
     echo " -m      Include the MD5 sum for each file in the output manifest."
+    echo " -s      Include size in bytes."
+    echo " -M      Include modification date."
     echo " -o FILE Specify the manifest file location. By default, it's DIR/$FILE_DEFAULT. If '-' is given, the manifest is output to stdout, and not saved to disk."
     echo " -h      Show this help."
     echo " -t      Append a timestamp to the manifest filename. It is assumed that the file has extention .txt, and this option will fail if you specify a different extension. If using with -o, specify -o before -t. -t is ignored if you specify -o - (i.e. output to stdout)."
@@ -34,6 +36,7 @@ generateManifest() {
   [[ -n $TENT_HOSTNAME ]] && HOSTNAME="$TENT_HOSTNAME"
   echo "$HOSTNAME:$fullPath"
   [[ -n $2 ]] && echo "manifest captured: $2" # timestamp, or other information
+  utcOffset="$(date '+%z')"
   local includeMD5=$3
   (
     cd "$fullPath"
@@ -42,6 +45,8 @@ generateManifest() {
       [[ $includeDotFiles = true ]] && treeCommand+=(-a)
       [[ $debug = true ]] && treeCommand+=(-D)
       [[ $includeMD5 = true ]] && treeCommand+=(-e "[[ -f \"{}\" ]] && echo -n \"\$(md5sum \"{}\" | awk '{ print \$1 }')\"")
+      [[ $includeModTime = true || $includeSize = true ]] && treeCommand+=(-e "[[ -f \"{}\" ]] && echo -n \"\$(du -b --time --time-style='+%Y-%m-%dT%H:%M:%S%z' \"{}\" | awk '{ print \"mod(\"\$2\")size(\"\$1\")\" }')\"")
+      # ^ FIXME 2020-09-15T17:11:01Z separate modtime & size options
       [[ $followSymlinks = true ]] && treeCommand+=(-l -e "[[ -L \"{}\" ]] && { echo -n ' -> '; readlink \"{}\"; }")
       [[ $includeHiddenFiles = true ]] && treeCommand+=(-a)
       [[ $recurseIntoGitRepositories != true ]] && treeCommand+=(--ignore-path '\.git/.+') # ignore files within a git repository, list the repository root directory
@@ -69,7 +74,7 @@ noteGitRevision=false
 recurseIntoGitRepositories=false
 recurseIntoNodeModules=false
 followSymlinks=false
-while getopts ad:De:EgGhlmo:t flag; do
+while getopts ad:De:EgGhlmMo:st flag; do
   case $flag in
     a) includeDotFiles=true;;
     d) dir="$OPTARG";;
@@ -78,6 +83,8 @@ while getopts ad:De:EgGhlmo:t flag; do
     E) editAfter=true;;
     g) noteGitRevision=true;;
     G) recurseIntoGitRepositories=true;;
+    M) includeModTime=true;;
+    s) includeSize=true;;
     N) recurseIntoNodeModules=true;;
     h) showHelp; exit 0;;
     l) followSymlinks=true;;
