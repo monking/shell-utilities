@@ -153,7 +153,7 @@ generateTreePipeline=("generateTree \"\${args[@]}\"")
 
 concatFilters=
 if [[ ${#perFileFilterExpressions[@]} -gt 0 ]]; then
-  concatFilters="echo -n \"{}\" | grep -vE \"$(joinArray "\n" "${perFileFilterExpressions[@]}")\""
+  concatFilters="echo -n \"{}\" | grep -vE \"$(joinArray $'\n' "${perFileFilterExpressions[@]}")\""
   [[ $debug = true ]] && echo "# DEBUG: concatFilters: $concatFilters" >&2
   generateTreePipeline+=("evalPerFile \"\$concatFilters\" skipLineOnError suppressOutput skipChildren") # values 2-4 are not read; written out for clarity
 fi
