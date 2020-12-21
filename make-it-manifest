@@ -20,6 +20,13 @@ showHelp() {
     echo " -l      Follow symlinks."
     echo " -m      Include the MD5 sum for each file in the output manifest."
     echo " -s      Include size in bytes."
+    # Feature request (2020-12-20, id=01krF6m):
+    #      -S      Skip file if size is unchanged from previous manifest.
+    # This would require reading the previous manifest (and thus also not
+    # immediately overwriting it) and matching a found file with its entry.
+    #
+    # It would also save a LOT of time, especially for large files and slow
+    # drives or connections.
     echo " -M      Include modification date."
     echo " -o FILE Specify the manifest file location. By default, it's DIR/$FILE_DEFAULT. If '-' is given, the manifest is output to stdout, and not saved to disk."
     echo " -h      Show this help."
