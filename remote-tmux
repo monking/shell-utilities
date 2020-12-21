@@ -1,0 +1,94 @@
+#!/bin/bash
+
+showHelp() {
+	echo "USAGE remote-tmux [OPTIONS] HOST [ssh OPTIONS...]"
+	echo
+	echo "SYNOPSIS:"
+	echo "  Remote tmux via ssh pseudo terminal. This boils down to this command:"
+	echo "  ssh [SSH_OPTIONS...] -t \"tmux a -t SESSION_NAME || tmux new-session -s SESSION_NAME\""
+	echo
+	echo "OPTIONS:"
+	echo "  -1       Detach any other tmux clients from the targeted session."
+	echo "  -s NAME  If omitted, environment variable REMOTE_TMUX_SESSION_NAME is used (currently '$REMOTE_TMUX_SESSION_NAME')."
+  echo "  -t SEC   Timeout if not connected successfully in SEC seconds."
+	echo "  -D       Dry run: output the ssh command as it would be run, and don't execute it."
+	echo ""
+	echo "  HOST  The ssh configured HostName, or username@host."
+	echo ""
+	echo "  Any arguments after HOST are passed directly to ssh instead of invoking tmux. This is useful if 'remote-tmux' is the primary method of invoking ssh to a host, as in the case of 'alias myhost=\"remote-tmux myhost\"'."
+	echo ""
+	echo " The 'SSH' env variable is used if defined, otherwise 'ssh' is assumed. This is useful if you want to use a specific installation of SSH."
+}
+
+shout() {
+  echo "$@" >&2
+}
+
+whisper() {
+  [[ $verbose = true ]] && shout "$@"
+}
+
+if [[ ${#@} -eq 0 || $1 = '-h' ]]; then
+  showHelp >&2
+	exit 1
+fi
+
+sshArgs=()
+
+dryRun=false
+verbose=false
+thereCanBeOnlyOne=false
+sshCustomParts=()
+while getopts :h1s:Dt:v flag; do
+	case $flag in
+		1) thereCanBeOnlyOne=true;;
+		h) showHelp; exit;;
+		s) targetSessionName="$OPTARG";;
+		D) dryRun=true;;
+    t) sshArgs+=(-o "ConnectTimeout $OPTARG");;
+		v) sshArgs+=("-v"); verbose=true;;
+    *) sshArgs+=("-$OPTARG");sshCustomParts+=("-$OPTARG");;
+	esac
+done
+[[ $OPTIND -gt 1 ]] && shift $((OPTIND - 1))
+
+if [[ $# -eq 1 ]]; then
+  # must be the hostname
+  sshArgs+=("$1")
+else
+  # more than the hostname
+  sshCustomParts+=("$@")
+  sshArgs+=("$@")
+fi
+
+[[ -z $targetSessionName ]] && targetSessionName="$(whoami)"
+
+localHostname="$TENT_HOSTNAME" # a "nice" hostname
+[[ -z "$localHostname" ]] && localHostname="$HOSTNAME"
+[[ -z "$localHostname" ]] && localHostname="$(hostname)"
+
+if [[ ${#sshCustomParts[@]} -eq 0 ]]; then
+  attachingSessionName="${targetSessionName}-${localHostname}"
+  attachOptions=()
+  [[ $thereCanBeOnlyOne = true ]] && attachOptions+=("-d")
+  attachOptions+=(-t $attachingSessionName)
+  sshArgs+=(-t "tmux a ${attachOptions[*]} || tmux new-session -s $attachingSessionName -t $targetSessionName || tmux new-session -s $targetSessionName")
+else
+  shout "Custom SSH args: ${sshCustomParts[*]}"
+fi
+
+[[ -z $SSH ]] && export SSH=ssh
+
+if [[ $dryRun = true ]]; then
+  output="$SSH"
+  for arg in "${sshArgs[@]}"; do
+    if [[ $arg =~ ' ' ]]; then
+      output+=" '$arg'";
+    else
+      output+=" $arg";
+    fi
+  done
+  echo "$output"
+else
+  $SSH "${sshArgs[@]}"
+fi
