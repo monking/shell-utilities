@@ -1,37 +1,82 @@
 #!/bin/bash
 
-function cd_to_git_root() {
-	cd "$(canon .)"
+# {:01kxCcs} TODO: show help, or at least confirmation prompt with description of effect, when run without arguments.<br/><br/>2021-01-06T17:29:38Z
+# {:01kxD6e} TODO: Change bcrypt to gpg encryption, or similar.
+
+showHelp() {
+  echo "USAGE: gb [-h] [GIT COMMAND] [<bundle_path>|<bundle_dir>] [<other_git_arguments>]]"
+  echo "	-e encrypt using bcrypt (WARNING: bcrypt is outdated; better to not use this, and encrypt in a separate step)"
+  echo "	-h show this help"
+  echo ""
+  echo "GIT COMMAND: e.g. fetch | pull | clone"
+  echo ""
+  echo "EXAMPLES:"
+  echo "gb clone ~/Dropbox/work.bundle.bfe ~/work"
+  echo "gb pull ~/Dropbox/work.bundle.bfe"
+  echo "gb -e #creates a bundle in GIT_BUNDLE_DIR ($GIT_BUNDLE_DIR)"
+  echo ""
+  echo "BUGS:"
+  echo "- Currently only works with remotes accessible on the same file system (no rsync/ssh/sftp)."
+}
+
+canon_local() {
+  # copied from [canon](/home/clo/tent/bin/canon "d:id=01kxCnV&md5=59024cd0c136f6cc8387d3b68a177d65&time-modified=2020-07-09T18:33:57Z&size=730")
+  cwd="$PWD"
+  for targetFile in "$@"; do
+    cd "$cwd"
+    cd "$(dirname "$targetFile")" 2>/dev/null || continue
+    targetFile="$(basename "$targetFile")"
+
+    # Iterate down a (possible) chain of symlinks
+    while [ -L "$targetFile" ]
+    do
+      targetFile="$(readlink "$targetFile")"
+      cd "$(dirname "$targetFile")"
+      targetFile="$(basename "$targetFile")"
+    done
+
+    # Compute the canonicalized name by finding the physical path
+    # for the directory we're in and appending the target file.
+    physDir="$(pwd -P)"
+    result=$physDir/
+    if [ ! "$targetFile" = "." ]; then
+      result="$result$targetFile"
+    fi
+    if [ -t 1 ]; then
+      echo "$result"
+    else
+      printf "$result"
+    fi
+  done
+}
+
+cd_to_git_root() {
+	cd "$(canon_local .)"
 	cd "$(git rev-parse --show-cdup)"
 }
+
+# exit status codes
+E_HELP=1
+E_NOTGITDIR=2
 
 # note the current working directory
 cwd="$(pwd)"
 
-# get flags
+# options/flags
+skipPrompt=false
 while getopts 'eh' flag; do
 	case $flag in
-		e) encrypt=true;;
-		h) help=true;;
+		# e) encrypt=true;;
+		h) showHelp >&2; exit $E_HELP;;
+		y) skipPrompt=true;;
 	esac
 done; shift $(( OPTIND - 1 ))
 
-# show help
-if [[ $help = true ]]; then
-	echo "\
-USAGE: gb [-eh] [fetch | pull | clone] [<bundle_path>|<bundle_dir>] [<other_git_arguments>]]
-	-e encrypt using bcrypt (WARNING: bcrypt is outdated; better to not use this, and encrypt in a separate step)
-	-h show this help
-
-EXAMPLES:
-gb clone ~/Dropbox/work.bundle.bfe ~/work
-gb pull ~/Dropbox/work.bundle.bfe
-gb -e #creates a bundle in GIT_BUNDLE_DIR ($GIT_BUNDLE_DIR)
-
-BUGS:
-- Currently only works with remotes accessible on the same file system (no SSH).
-"
-	return
+cd_to_git_root
+if [[ ! -e .git ]]; then
+  echo "git $git_command must be run from a git working tree" >&2
+  showHelp >&2
+  exit $E_NOTGITDIR
 fi
 
 # if the first argument is not a file or directory, consider it a git command and take it out of the argument list.
@@ -45,18 +90,17 @@ remote="$1"
 shift 1
 git_args=($@)
 
-# if no remote is specified, assume GIT_BUNDLE_DIR, or HOME
+# if no remote is specified, assume GIT_BUNDLE_DIR, or HOME, with confirmation.
 if [[ -z $remote ]]; then
 	[[ -d "$GIT_BUNDLE_DIR" ]] && remote="$GIT_BUNDLE_DIR" || remote="$HOME"
+  if ! confirm-prompt "Create Git bundle at '$remote'?"; then
+    showHelp >&2
+    exit $E_HELP
+  fi
 fi
 
 # we need to figure out the name of our remote, based on git working directory's name
 if [[ -d "$remote" ]]; then
-	cd_to_git_root
-	if [[ ! -e .git ]]; then
-		echo "git $git_command must be run from a git working tree"
-		return 1
-	fi
 	working_dir_name=$(basename "$(pwd)")
 	cd "$cwd"
 	if [[ -d "$remote" ]]; then
