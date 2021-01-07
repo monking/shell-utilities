@@ -117,6 +117,8 @@ done
   fi
 }
 
+exit 0
+
 # TODO
 # {:01ikwAR} [?] option to record files' modified time in the manifest ({01jOnUC} [?] +size)
 # {:01jEiby} TODO: [?] follow submodule text `.git` file references to get their commit hash.\n\n```\n$ file some/submodule/.git\nsome/submodule/.git: ASCII text\n\n$ cat some/submodule/.git\ngitdir: ../.git/modules/bin\n\n$ git --git-dir=some/submodule/../.git/modules/submodule rev-parse HEAD\naecd7b12cfe3b8ada55f16534a1325f12deb258e\n```
