@@ -73,8 +73,8 @@ editFile() {
 editAfter=false
 computeMD5PerFile=false
 debug=false
-dir="$PWD"
-file="$FILE_DEFAULT"
+inputPath="$PWD"
+outputPath="$FILE_DEFAULT"
 timestamp="$(TZ=UTC date '+%Y%m%dT%H%M%SZ')"
 includeDotFiles=false
 noteGitRevision=false
@@ -84,7 +84,7 @@ followSymlinks=false
 while getopts ad:De:EgGhlmMo:st flag; do
   case $flag in
     a) includeDotFiles=true;;
-    d) dir="$OPTARG";;
+    d) inputPath="$OPTARG";;
     D) debug=true;;
     e) treeFurtherOptions+=(-e "$OPTARG");;
     E) editAfter=true;;
@@ -96,22 +96,27 @@ while getopts ad:De:EgGhlmMo:st flag; do
     h) showHelp; exit 0;;
     l) followSymlinks=true;;
     m) computeMD5PerFile=true;;
-    o) file="$OPTARG";;
-    t) file="${file/.txt/.$timestamp.txt}";;
+    o) outputPath="$OPTARG";;
+    t) outputPath="${outputPath/.txt/.$timestamp.txt}";;
   esac
 done
 
 {
-  genManCommand=(generateManifest "$dir" "$timestamp" $computeMD5PerFile)
-  if [[ $file != '-' ]]; then # write to disk, and optionally edit
-    echo "Generating manifest in file $file" >&2
-    "${genManCommand[@]}" > "$file" &&
+  if [[ -d "$inputPath" ]]; then
+    genManCommand=(generateManifest "$inputPath" "$timestamp" $computeMD5PerFile)
+  elif command -v rhash &>/dev/null; then
+    genManCommand=(rhash "$inputPath")
+  fi
+
+  if [[ $outputPath != '-' ]]; then # write to disk, and optionally edit
+    echo "Generating manifest in file $outputPath" >&2
+    "${genManCommand[@]}" > "$outputPath" &&
       [[ $editAfter = true ]] &&
-      editFile "$file"
+      editFile "$outputPath"
   elif $editAfter; then # stdout + edit
-    echo "Generating manifest in file $file" >&2
+    echo "Generating manifest in file $outputPath" >&2
     echo "Will open in editor afterwards." >&2
-    "${genManCommand[@]}" | editFile "$file"
+    "${genManCommand[@]}" | editFile "$outputPath"
   else # stdout
     "${genManCommand[@]}"
   fi
