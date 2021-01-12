@@ -68,7 +68,10 @@
     # log).
     youtubeDlOptions+=(--download-archive "$downloadArchivePath" --no-overwrites)
 
-    youtubeDlOptions+=(--no-progress --no-warnings --ignore-errors --no-call-home)
+    youtubeDlOptions+=(--no-progress --no-call-home)
+
+    # 2021-01-12T13:42:27-0800 re-enabling warnings/errors, for debugging
+    # youtubeDlOptions+=(--no-warnings --ignore-errors)
 
     youtubeDlOptions+=(--write-sub --write-auto-sub --embed-subs --sub-format srt) # take what we can get
 
