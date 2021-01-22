@@ -1,8 +1,20 @@
 #!/bin/bash
 
+declare -A TODO
+TODO['writeLocalPlaylist']="writeLocalPlaylist() is disabled, because its regular expression pattern used to find the video IDs no longer matches the contents of the page. 2021-01-21"
 { # functions
   feedback() {
     1>&2 echo "$@"
+  }
+
+  whisper() {
+    [[ $verbose = true ]] && feedback "$@"
+  }
+
+  todo() { # Created 2021-01-21
+    note="$1"
+    [[ -n "${TODO[$note]}" ]] && note="${TODO[$note]}"
+    whisper "TODO: $note"
   }
 
   showHelp() {
@@ -23,11 +35,22 @@
 
 	log() {
 		local file="$1"
-		if $verbose; then
-			tee -a "$file"
-		else
-			cat >> "$file"
-		fi
+		local prefix="$2"
+    if [[ -n "$prefix" ]]; then
+      sed "s|^|[${prefix}] |" | { # using pipes `|` as regex delimiters, as they're unlikely to be in the $prefix (2021-01-22).
+        if [[ $verbose = true ]]; then
+          tee -a "$file"
+        else
+          cat >> "$file"
+        fi
+      }
+    else
+      if [[ $verbose = true ]]; then
+        tee -a "$file"
+      else
+        cat >> "$file"
+      fi
+    fi
 	}
 
   # # Gets JSON data for all videos in the playlist, not for the playlist
@@ -39,7 +62,8 @@
   # }
 
   getVideoIdsFromPlaylistJson() {
-    echo "$1" | json # TODO: where are the videos?
+		todo "Where are the videos?" # 2021-01-22 upgrading comment to log
+    echo "$1" | json
   }
 
 	downloadVideoFiles() {
@@ -52,6 +76,8 @@
 		shift $((OPTIND - 1))
 
     local youtubeDlOptions=()
+
+    [[ $verbose = true ]] && youtubeDlOptions+=(--verbose)
 
     [[ -n $audioFormat ]] && youtubeDlOptions+=(--extract-audio --audio-format "$audioFormat")
 
@@ -85,8 +111,12 @@
     cd "$destinationDirectory"
 
 		local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
-    echo \$ "${youtubeDlCommand[@]}" >> "$tmpLogFile"
-    "${youtubeDlCommand[@]}" >> "$tmpLogFile"
+    echo \$ "${youtubeDlCommand[@]}" | log "$tmpLogFile"
+    if [[ $verbose = true ]]; then
+      "${youtubeDlCommand[@]}" 2>&1 | log "$tmpLogFile" 'youtube-dl'
+    else
+      "${youtubeDlCommand[@]}" | log "$tmpLogFile" 'youtube-dl'
+    fi
 
     if grep 'Download completed' "$tmpLogFile" &>/dev/null; then
       # remove unnecessary lines from log
@@ -103,6 +133,8 @@
   }
 
 	writeLocalPlaylist() {
+    todo writeLocalPlaylist; return 1
+
 		local playlistUrl flag OPTARG OPTIND
 		while getopts l:u: flag; do
 			case $flag in
@@ -119,6 +151,7 @@
 		# local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
 		# feedback "${youtubeDlCommand[@]}"
 		local playlistPageData="$(curl -s "$playlistUrl")"
+    whisper "$playlistPageData" # 2021-01-21T22:45:39-0800
 		local playlistTitle="$(echo -e "$playlistPageData" | grep '<title>' | perl -pe 's/^.*<title>([^<]+?)( - YouTube)?<\/title>.*/\1/')"
 		local localPlaylistPath="$destinationDirectory/$(echo "$playlistTitle" | nice).m3u8"
 		local videoIds=($(echo -e "$playlistPageData" | grep '<tr.*watch?v=' | perl -pe 's/^.*watch\?v=([^&]+).*/\1/'))
