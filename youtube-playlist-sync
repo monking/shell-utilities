@@ -86,7 +86,7 @@
 
 		local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
     echo \$ "${youtubeDlCommand[@]}" >> "$tmpLogFile"
-    "${youtubeDlCommand[@]}" >> "$tmpLogFile"
+    "${youtubeDlCommand[@]}" 2>&1 >> "$tmpLogFile"
 
     if grep 'Download completed' "$tmpLogFile" &>/dev/null; then
       # remove unnecessary lines from log
