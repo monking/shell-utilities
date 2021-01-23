@@ -1,20 +1,18 @@
 #!/bin/bash
 
 showHelp() {
-  echo "\
-OPTIONS:
-
-  -D     Show debug messages.
-
-  -e CMD Evaluate a shell command, replacing '{}' with the filename, and print
-         its output after ' :: ' for every line. Multiple allowed.
-
-  --ignore-path PATTERN
-         Ignore paths matching the given regular expression
-         PATTERN (using grep -E, extended Regular Expressions).
-
-  -h     Show this help.
-"
+  echo "OPTIONS:"
+  echo ""
+  echo "  -D     Show debug messages."
+  echo ""
+  echo "  -e CMD Evaluate a shell command, replacing '{}' with the filename, and print"
+  echo "         its output after ' :: ' for every line. Multiple allowed."
+  echo ""
+  echo "  --ignore-path PATTERN"
+  echo "         Ignore paths matching the given regular expression"
+  echo "         PATTERN (using grep -E, extended Regular Expressions)."
+  echo ""
+  echo "  -h     Show this help."
   echo ""
   echo "Dependencies: tree, grep"
   #--limit NUMBER         Consider only NUMBER lines. Ignored lines still count toward the total.
@@ -45,6 +43,7 @@ generateTree() {
 
 evalPerFile() {
   local expr="$1"
+  # arguments 2-4 can be any non-empty value; I find it helpful to write the name of the arg, for clarity. In JavaScript I would use an object and expect named properties.
   local skipLineOnError="$2"
   local suppressOutput="$3"
   local skipChildren="$4"
@@ -134,7 +133,7 @@ argIndex=-1
 # limit=0
 for arg in "$@"; do
   [[ $debug = true ]] && echo "# arg '$arg'" >&2
-  argIndex=$((argIndex + 1))
+  let argIndex+=1
   [[ $skipArg = true ]] && { skipArg=false; continue; }
   case "$arg" in 
     '-e') perFileOutputExpressions+=("${inputArgs[$((argIndex + 1))]}"); skipArg=true;;
@@ -155,7 +154,7 @@ concatFilters=
 if [[ ${#perFileFilterExpressions[@]} -gt 0 ]]; then
   concatFilters="echo -n \"{}\" | grep -vE \"$(joinArray $'\n' "${perFileFilterExpressions[@]}")\""
   [[ $debug = true ]] && echo "# DEBUG: concatFilters: $concatFilters" >&2
-  generateTreePipeline+=("evalPerFile \"\$concatFilters\" skipLineOnError suppressOutput skipChildren") # values 2-4 are not read; written out for clarity
+  generateTreePipeline+=("evalPerFile \"\$concatFilters\" skipLineOnError suppressOutput skipChildren")
 fi
 
 concatPerFileExpressions=
