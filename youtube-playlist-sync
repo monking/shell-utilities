@@ -114,8 +114,10 @@ TODO['writeLocalPlaylist']="writeLocalPlaylist() is disabled, because its regula
     youtubeDlOptions+=(--write-sub --write-auto-sub --embed-subs --sub-format srt) # take what we can get
 
     # --output template: https://github.com/ytdl-org/youtube-dl/blob/master/README.md#output-template
-    youtubeDlOptions+=(--output '%(upload_date)s.%(uploader)s.%(title)s.%(id)s.%(format)s.%(ext)s')
-    # youtubeDlOptions+=(--restrict-filenames) # 2021-02-01 allowing Unicode characters
+    if ! [[ "$*" =~ '--output ' ]]; then
+      youtubeDlOptions+=(--output '%(upload_date)s.%(uploader)s.%(title)s.id,%(id)s.%(ext)s')
+      youtubeDlOptions+=(--restrict-filenames)
+    fi
 
     youtubeDlOptions+=(--metadata-from-title "%(artist)s - %(title)s")
     # Disabling 2021-05-21 (unused) # youtubeDlOptions+=(--print-json) # EXPERIMENTAL 2021-02-01
