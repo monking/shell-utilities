@@ -85,7 +85,6 @@ TODO['writeLocalPlaylist']="writeLocalPlaylist() is disabled, because its regula
         esac
       fi
     done
-		shift $((OPTIND - 1))
 
     local youtubeDlOptions=()
 
@@ -171,7 +170,7 @@ TODO['writeLocalPlaylist']="writeLocalPlaylist() is disabled, because its regula
 				u) playlistUrl="$OPTARG";;
 			esac
 		done
-		shift $((OPTIND - 1))
+		[[ $OPTIND -gt 1 ]] && shift $((OPTIND - 1))
 
 		feedback "Creating local playlist, mirroring remote."
 
