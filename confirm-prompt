@@ -22,10 +22,15 @@ forwardUnrecognizedInput=false
 readOptions=()
 moreUserOptions=()
 
+if [[ $# -eq 0 ]]; then
+  showHelp >&2
+  exit 1
+fi
+
 while getopts ehn1Oo:rt:X flag; do
   case $flag in
     e) promptArgs+=(-e);;
-    h) showHelp; exit 1;;
+    h) showHelp >&2; exit 0;;
     o) moreUserOptions+=("$OPTARG");;
     O) useOnlyMoreOptions=true;;
     n) defaultResponse=no;;
