@@ -1,5 +1,7 @@
 #!/bin/bash
 
+[[ -z $REMOTE_TMUX_SESSION_NAME ]] && REMOTE_TMUX_SESSION_NAME="$(whoami)"
+
 showHelp() {
 	echo "USAGE remote-tmux [OPTIONS] HOST [ssh OPTIONS...]"
 	echo
@@ -9,7 +11,7 @@ showHelp() {
 	echo
 	echo "OPTIONS:"
 	echo "  -1       Detach any other tmux clients from the targeted session."
-	echo "  -s NAME  If omitted, environment variable REMOTE_TMUX_SESSION_NAME is used (currently '$REMOTE_TMUX_SESSION_NAME')."
+	echo "  -s NAME  If omitted, environment variable REMOTE_TMUX_SESSION_NAME, or the current user's name, is used (currently '$REMOTE_TMUX_SESSION_NAME')."
   echo "  -t SEC   Timeout if not connected successfully in SEC seconds."
 	echo "  -D       Dry run: output the ssh command as it would be run, and don't execute it."
 	echo ""
@@ -61,7 +63,7 @@ else
   sshArgs+=("$@")
 fi
 
-[[ -z $targetSessionName ]] && targetSessionName="$(whoami)"
+[[ -z $targetSessionName ]] && targetSessionName="$REMOTE_TMUX_SESSION_NAME"
 
 localHostname="$TENT_HOSTNAME" # a "nice" hostname
 [[ -z "$localHostname" ]] && localHostname="$HOSTNAME"

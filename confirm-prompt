@@ -1,5 +1,10 @@
 #!/bin/bash
 
+E_ERROR=1
+E_HELP=100
+E_AMBIGUOUS=127
+E_INT=130
+
 showHelp() {
   echo "-e  Like 'echo -e', parse special characters like '\\n'."
   echo "-n  Use 'no' as the default response when the user enters an empty response."
@@ -30,7 +35,7 @@ fi
 while getopts ehn1Oo:rt:X flag; do
   case $flag in
     e) promptArgs+=(-e);;
-    h) showHelp >&2; exit 0;;
+    h) showHelp; exit $E_HELP;;
     o) moreUserOptions+=("$OPTARG");;
     O) useOnlyMoreOptions=true;;
     n) defaultResponse=no;;
@@ -100,14 +105,14 @@ else
         separator=', '
       done
       echo "" >&2 # newline
-      exit 130
+      exit $E_AMBIGUOUS
     fi
   elif [[ -n $negativePattern && $REPLY =~ $negativePattern ]]; then
-    exit 1
+    exit $E_ERROR
   elif [[ $forwardUnrecognizedInput = true ]]; then
     echo -n "$REPLY"
     exit 0
   else
-    exit 1
+    exit $E_ERROR
   fi
 fi
