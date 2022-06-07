@@ -8,7 +8,7 @@ E_INT=130
 showHelp() {
   echo "-e  Like 'echo -e', parse special characters like '\\n'."
   echo "-n  Use 'no' as the default response when the user enters an empty response."
-  echo "-1  Act as soon as the user enters 1 character."
+  echo "-1  Act as soon as the user enters 1 character. With this option only the 1st letter of -o OPTION is checked."
   echo "-h  Show this help."
   echo "-o OPTION  Give other options besides Y or N (you may use multiple -o). The response code for these options is 2 + the index of the option (from 0), so choosing the first extra option would return 2, and the second would return 3."
   echo "-O  Use only the options specified with -o."
@@ -24,6 +24,7 @@ timeoutDefaultOpposite=false
 newlineAfterResponse=false
 useOnlyMoreOptions=false
 forwardUnrecognizedInput=false
+shouldOnlyCheckFirstLetterOfOption=false
 readOptions=()
 moreUserOptions=()
 
@@ -34,7 +35,7 @@ while getopts ehn1Oo:rt:X flag; do
     o) moreUserOptions+=("$OPTARG");;
     O) useOnlyMoreOptions=true;;
     n) defaultResponse=no;;
-    1) readOptions+=(-n1);newlineAfterResponse=true;;
+    1) readOptions+=(-n1);shouldOnlyCheckFirstLetterOfOption=true;newlineAfterResponse=true;;
     r) forwardUnrecognizedInput=true;;
     t) readOptions+=(-t "$OPTARG");; # TODO: communicate timeout in prmopt to user...
     X) timeoutDefaultResponse=no;;
@@ -81,9 +82,23 @@ else
   matchingOptionIndexes=()
   matchingOptions=()
   i=-1
+
+	checkReply="$REPLY"
+	if [[ $shouldOnlyCheckFirstLetterOfOption == true ]]; then
+		checkReply="${checkReply:0:1}"
+		checkReply="${checkReply,,}"
+	fi
+
   for option in "${moreUserOptions[@]}"; do
     let i++
-    if [[ $option =~ $REPLY ]]; then
+
+		checkOption="$option"
+		if [[ $shouldOnlyCheckFirstLetterOfOption == true ]]; then
+			checkOption="${checkOption:0:1}"
+			checkOption="${checkOption,,}"
+		fi
+
+		if [[ $checkOption =~ $checkReply ]]; then
       matchingOptionIndexes+=($i)
       matchingOptions+=($option)
     fi
