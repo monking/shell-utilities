@@ -50,7 +50,7 @@ SCRIPT_DESCRIPTION_LINES=(
 	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
-	"0.0.3 @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
+	"0.0.3 @1666205166  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
 	"0.0.2 @1664215277  Added help."
 	"0.0.1 @1664175524"
 )
@@ -134,8 +134,7 @@ main() {
 		yell "(Showing only failures…)"
 		[[ -t 0 ]] \
 			&& confirm "See full output?" 'n' \
-			&& cat <(echo "### output from '${SUM_COMMAND[*]} -c':") "$checkOutputCacheFile" <(echo -e "\n### sum file data being checked:") "$sumFile" | l
-ess
+			&& cat <(echo "### output from '${SUM_COMMAND[*]} -c':") "$checkOutputCacheFile" <(echo -e "\n### sum file data being checked:") "$sumFile" | less
 	else
 		yell "✓ All OK";
 	fi

@@ -237,7 +237,7 @@ findArgs+=(-print0);
 	if [[ $opt_should_include_location_in_output == true ]]; then
 		dirPath="${PWD}"
 		if [[ $opt_should_dereference == true ]]; then
-			dirPath="$(readlink -f "${PWD}")";
+			dirPath="$(readlink -f "${PWD}")"; # FIXME: -f option isn't the same in BSD
 		else
 			dirPath="${PWD}"
 		fi
