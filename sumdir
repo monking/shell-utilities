@@ -75,13 +75,13 @@ SCRIPT_DESCRIPTION_LINES=(
 	"*_LIST_* options must be specified colon-separated like PATH."
 	""
 	"Example:"
-	"  export SUMDIR_OPT_EXCLUDE_PATH_LIST='*/.git/*:.DS_Store'"
-	"  export SUMDIR_OPT_INCLUDE_LOCATION_IN_OUTPUT=true;"
+	"  export $(getEnvOptName opt_list_exclude_path)='*/.git/*:.DS_Store'"
+	"  export $(getEnvOptName opt_should_include_location_in_output)=true;"
 	""
 	"Environment variable names:"
 );
 for opt in "${OPT_VAR_NAMES[@]}"; do
-	SCRIPT_DESCRIPTION_LINES+=("  $(getEnvOptName "$opt")")
+	SCRIPT_DESCRIPTION_LINES+=("  $(getEnvOptName "$opt")");
 done
 SCRIPT_VERSIONS=(
 	"0.0.7 @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
@@ -140,33 +140,38 @@ opt_should_include_location_in_output=false;
 opt_verbose=0;
 
 getOptsFromEnv() {
-	local missingEnv=()
+	local missingEnv=();
 	for opt in "${OPT_VAR_NAMES[@]}"; do
-		envVarName="$(getEnvOptName "$opt")"
+		envVarName="$(getEnvOptName "$opt")";
 		if ! envValue="$(eval "[[ -n \$${envVarName} ]] && echo -en \"\$${envVarName}\"")"; then
-			missingEnv+=("${envVarName}")
-			continue
+			missingEnv+=("${envVarName}");
+			continue;
 		fi
-		[[ -n $envValue ]] || continue
-		if [[ $opt =~ _list$ ]]; then
-			local listValue=()
+		[[ -n $envValue ]] || continue;
+		if [[ $opt =~ ^opt_list_ ]]; then
+			local listValue=();
+			local singleValue='';
 			while [[ "$envValue" =~ : ]]; do
-				listValue+=("${envValue%%:*}")
-				envValue="${envValue#*:}"
+				singleValue="${envValue%%:*}";
+				envValue="${envValue#*:}"; # Remove first segment from colon-delimited list.
+				if [[ -z "$singleValue" ]]; then
+					continue;
+				fi
+				listValue+=("$singleValue");
 			done
-			listValue+=("${envValue}")
+			listValue+=("${envValue}");
 			if eval "${opt}=(\"\${listValue[@]}\")"; then
-				whisper 1 "${opt} == (${listValue[*]}) # from ${envVarName}"
+				whisper 1 "${opt} == (${listValue[*]}) # from ${envVarName}";
 			fi
 		else
-			eval "${opt}=\"\$envValue\""
-			whisper 1 "${opt} == \"${envValue}\" # from ${envVarName}"
+			eval "${opt}=\"\$envValue\"";
+			whisper 1 "${opt} == \"${envValue}\" # from ${envVarName}";
 		fi
 	done
-	[[ ${#missingEnv[@]} -gt 0 ]] && whisper 2 "No env vars for options: ${missingEnv[*]}"
+	[[ ${#missingEnv[@]} -gt 0 ]] && whisper 2 "No env vars for options: ${missingEnv[*]}";
 }
 
-getOptsFromEnv
+getOptsFromEnv;
 
 
 ## EXECUTION
@@ -231,6 +236,7 @@ if [[ $# -gt 0 ]]; then
 fi
 findArgs+=(-print0);
 
+whisper 0 "\$ find ${findArgs[*]}";
 {
 	echo "# Generated ${date} by:  ${CALLED_AS_WITH_ARGS}";
 	echo "# To check file integrity, run:  ${SUM_COMMAND[*]} -c ${outputFilename}";
