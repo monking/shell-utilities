@@ -48,7 +48,7 @@ getEnvOptName() {
 
 ## DOCUMENTATION
 
-SCRIPT_USAGE="${0##*/} [OPTIONS] [help]"
+SCRIPT_USAGE="${0##*/} [OPTIONS] [help] [PATH...]"
 SCRIPT_OPTIONS=(
   "-h|--help|help     Show this help"
   "-r                 Recurse into directory"
@@ -67,6 +67,8 @@ SCRIPT_OPTIONS=(
   "--version          Output version information"
 );
 SCRIPT_DESCRIPTION_LINES=(
+	"If no PATH is specified, the current directory (\$PWD) is used."
+	""
 	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed, and the newest one is used."
 	""
 	"You may add environment variables to control these options."
@@ -84,6 +86,7 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("  $(getEnvOptName "$opt")");
 done
 SCRIPT_VERSIONS=(
+	"0.0.8 @1669653009  Add support for multiple optional PATH arguments."
 	"0.0.7 @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
 	"0.0.6 @1664219098  Adding SUMDIR_OPT_* env config. Put directory path in output file, with option '-l'."
 	"0.0.4 @1664178613  Exclude .git contents."
@@ -176,7 +179,7 @@ getOptsFromEnv;
 
 ## EXECUTION
 
-unknownArgs=();
+inputDirectories=();
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		-h|--help|help) showHelp; exit;;
@@ -194,70 +197,91 @@ while [[ $# -gt 0 ]]; do
 		--) shift; break;;
 		--bk) opt_output_file_template='{}..SHA256SUM';;
 		--version) echo "v${SCRIPT_VERSION%%  *} ($0)"; exit;;
-		*) unknownArgs+=("$1");;
+		*) inputDirectories+=("$1");;
 	esac
 	shift;
 done
 
 whisper 1 "(Verbose output level: ${opt_verbose})"
 
-[[ ${#unknownArgs[@]} -gt 0 ]] && yell "Ignoring ${#unknownArgs[@]} extra arguments: ${unknownArgs[*]}";
+[[ ${#inputDirectories[@]} -eq 0 ]] && inputDirectories=("$PWD");
 
-if [[ $opt_should_single_hash_file == true ]]; then
-	removeFilesByTemplate "$opt_output_file_template";
-fi
 
-date="$(TZ="$opt_timezone" date "$opt_date_format")";
 
-outputFilename="${opt_output_file_template/\{\}/$date}";
-
-findArgs=();
-if [[ $opt_should_dereference == true ]]; then
-	findArgs+=(-L);
-fi
-findArgs+=(.);
-if [[ $opt_should_recurse != true ]]; then
-	findArgs+=(-maxdepth 1);
-fi
-findArgs+=(-type f);
-findArgs+=(\! -name "$outputFilename");
-if [[ ${#opt_list_exclude_path[@]} -gt 0 ]]; then
-	for pattern in "${opt_list_exclude_path[@]}"; do
-		findArgs+=(\! -path "$pattern");
+## LOOP THROUGH INPUT DIRECTORIES
+dStackHeight=0
+for dir in "${inputDirectories[@]}"; do
+	while [[ $dStackHeight -gt 0 ]]; do
+		popd &>/dev/null \
+			&& let dStackHeight--;
 	done
-fi
-if [[ ${#opt_list_exclude_name[@]} -gt 0 ]]; then
-	for pattern in "${opt_list_exclude_name[@]}"; do
-		findArgs+=(\! -name "$pattern");
-	done
-fi
-if [[ $# -gt 0 ]]; then
-	findArgs+=("$@");
-fi
-findArgs+=(-print0);
 
-whisper 0 "\$ find ${findArgs[*]}";
-{
-	echo "# Generated ${date} by:  ${CALLED_AS_WITH_ARGS}";
-	echo "# To check file integrity, run:  ${SUM_COMMAND[*]} -c ${outputFilename}";
-	if [[ $opt_should_include_location_in_output == true ]]; then
-		dirPath="${PWD}"
-		if [[ $opt_should_dereference == true ]]; then
-			dirPath="$(readlink -f "${PWD}")"; # FIXME: -f option isn't the same in BSD
-		else
-			dirPath="${PWD}"
-		fi
-		echo "# Location:  $(hostname):${dirPath}";
+	if pushd "$dir" &>/dev/null; then
+		let dStackHeight++;
+	else
+		yell "Unable to access directory '$dir'. Skipping.";
+		continue;
 	fi
 
-		## Pulling this convenience out for now, since it breaks compatibility. @1666202382
-		# | sed -z 's/^\.\///' \ # BSD sed doesn't have `-z` (sed --version)
-		# | perl -pe 's/^\.\///' \ # untested @1666202382
-	must find "${findArgs[@]}" \
-		| perl -pe 's/(^|\x00)\.\//\1/g' \
-		| xargs -0 "${SUM_COMMAND[@]}";
-} > "${outputFilename}";
-sumStatus=$?;
-yell "Generated ${outputFilename}";
+	if [[ $opt_should_single_hash_file == true ]]; then
+		removeFilesByTemplate "$opt_output_file_template";
+	fi
 
-exit $sumStatus;
+	date="$(TZ="$opt_timezone" date "$opt_date_format")";
+
+	outputFilename="${opt_output_file_template/\{\}/$date}";
+
+	findArgs=();
+	if [[ $opt_should_dereference == true ]]; then
+		findArgs+=(-L);
+	fi
+	findArgs+=(.);
+	if [[ $opt_should_recurse != true ]]; then
+		findArgs+=(-maxdepth 1);
+	fi
+	findArgs+=(-type f);
+	findArgs+=(\! -name "$outputFilename");
+	if [[ ${#opt_list_exclude_path[@]} -gt 0 ]]; then
+		for pattern in "${opt_list_exclude_path[@]}"; do
+			findArgs+=(\! -path "$pattern");
+		done
+	fi
+	if [[ ${#opt_list_exclude_name[@]} -gt 0 ]]; then
+		for pattern in "${opt_list_exclude_name[@]}"; do
+			findArgs+=(\! -name "$pattern");
+		done
+	fi
+	if [[ $# -gt 0 ]]; then
+		findArgs+=("$@");
+	fi
+	findArgs+=(-print0);
+
+	whisper 1 "\$ find ${findArgs[*]}";
+	{
+		echo "# Generated ${date} by:  ${CALLED_AS_WITH_ARGS}";
+		echo "# To check file integrity, run:  ${SUM_COMMAND[*]} -c ${outputFilename}";
+		if [[ $opt_should_include_location_in_output == true ]]; then
+			dirPath="${PWD}"
+			if [[ $opt_should_dereference == true ]]; then
+				dirPath="$(readlink -f "${PWD}")"; # FIXME: -f option isn't the same in BSD
+			else
+				dirPath="${PWD}"
+			fi
+			echo "# Location:  $(hostname):${dirPath}";
+		fi
+
+			## Pulling this convenience out for now, since it breaks compatibility. @1666202382
+			# | sed -z 's/^\.\///' \ # BSD sed doesn't have `-z` (sed --version)
+			# | perl -pe 's/^\.\///' \ # untested @1666202382
+		must find "${findArgs[@]}" \
+			| perl -pe 's/(^|\x00)\.\//\1/g' \
+			| xargs -0 "${SUM_COMMAND[@]}";
+	} > "${outputFilename}";
+	sumStatus=$?;
+	yell "Generated ${dir}/${outputFilename}";
+
+	if [[ $sumStatus != 0 ]]; then
+		exit $sumStatus;
+	fi
+
+done
