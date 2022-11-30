@@ -8,6 +8,28 @@ yell() { echo "$@" >&2; }
 die() { yell "$@"; exit 111; }
 must() { "$@" || die "cannot $*"; }
 whisper() { local volume=$1; shift; [[ $opt_verbose -ge $volume ]] && yell "$@"; }
+getValueIfDefined() {
+	varName="$1";
+	eval "[ -n \"\${${varName}+v}\" ] && echo -en \"\$${varName}\"";
+	local status=$?;
+	return $status;
+}
+getArrayFromColonList() {
+	local varName="$1";
+	local colonValue="$2";
+	local listValue=();
+	local singleValue='';
+	while [[ "$colonValue" =~ : ]]; do
+		singleValue="${colonValue%%:*}";
+		colonValue="${colonValue#*:}"; # Remove first segment from colon-delimited list.
+		if [[ -z "$singleValue" ]]; then
+			continue;
+		fi
+		listValue+=("$singleValue");
+	done
+	listValue+=("${colonValue}");
+	eval "${opt}=(\"\${listValue[@]}\")"
+}
 
 
 ## DEPENDENCIES
@@ -25,6 +47,11 @@ whisper 1 "Using $(which "${SUM_COMMAND[0]}")";
 
 ## CONFIGURATION OPTIONS
 
+DEFAULT_OPT_LIST_EXCLUDE_PATH='*/.git/*:*/node_modules/*';
+DEFAULT_OPT_LIST_EXCLUDE_NAME='.DS_Store:.thumbnails';
+DEFAULT_OPT_DATE_FORMAT='+%Y%m%dT%H%M%SZ';
+DEFAULT_OPT_OUTPUT_FILE_TEMPLATE='.SHA256SUM--{}';
+
 CALLED_AS_WITH_ARGS="${0##*/} $*"
 OPT_OUTPUT_FILE_TEMPLATE_BK='{}..SHA256SUM'
 OPT_VAR_NAMES=(
@@ -39,6 +66,11 @@ opt_should_recurse
 opt_should_single_hash_file
 opt_timezone
 )
+getDefaultOptName() {
+	local opt="$1";
+	echo -n "DEFAULT_${opt}" \
+		| perl -C -lne 'print uc';
+}
 getEnvOptName() {
 	local opt="$1";
 	echo -n "SUMDIR_${opt}" \
@@ -77,7 +109,8 @@ SCRIPT_DESCRIPTION_LINES=(
 	"*_LIST_* options must be specified colon-separated like PATH."
 	""
 	"Example:"
-	"  export $(getEnvOptName opt_list_exclude_path)='*/.git/*:.DS_Store'"
+	"  export $(getEnvOptName opt_list_exclude_path)='$(getValueIfDefined $(getDefaultOptName opt_list_exclude_path))' # (default value)"
+	"  export $(getEnvOptName opt_list_exclude_name)='$(getValueIfDefined $(getDefaultOptName opt_list_exclude_name))' # (default value)"
 	"  export $(getEnvOptName opt_should_include_location_in_output)=true;"
 	""
 	"Environment variable names:"
@@ -86,6 +119,7 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("  $(getEnvOptName "$opt")");
 done
 SCRIPT_VERSIONS=(
+	"0.0.9 @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value."
 	"0.0.8 @1669653009  Add support for multiple optional PATH arguments."
 	"0.0.7 @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
 	"0.0.6 @1664219098  Adding SUMDIR_OPT_* env config. Put directory path in output file, with option '-l'."
@@ -132,8 +166,7 @@ removeFilesByTemplate() {
 ## ARGUMENT OPTIONS
 
 opt_timezone=UTC;
-opt_date_format='+%Y%m%dT%H%M%SZ';
-opt_output_file_template='.SHA256SUM--{}';
+opt_date_format="$(getValueIfDefined $(getDefaultOptName opt_date_format))"; opt_output_file_template="$(getValueIfDefined $(getDefaultOptName opt_output_file_template))";
 opt_should_single_hash_file=false;
 opt_list_exclude_name=();
 opt_list_exclude_path=();
@@ -145,40 +178,37 @@ opt_verbose=0;
 getOptsFromEnv() {
 	local missingEnv=();
 	for opt in "${OPT_VAR_NAMES[@]}"; do
-		envVarName="$(getEnvOptName "$opt")";
-		if ! envValue="$(eval "[[ -n \$${envVarName} ]] && echo -en \"\$${envVarName}\"")"; then
-			missingEnv+=("${envVarName}");
-			continue;
+		## Get environment variable.
+		fromVarName="$(getEnvOptName "$opt")";
+		if ! newValue="$(getValueIfDefined "$fromVarName")"; then
+			missingEnv+=("${fromVarName}");
+
+			## Get default.
+			fromVarName="$(getDefaultOptName "$opt")";
+			if ! newValue="$(getValueIfDefined "$fromVarName")"; then
+				whisper 2 "✗ Missing env and default values for '${opt}'";
+				continue;
+			fi
 		fi
-		[[ -n $envValue ]] || continue;
+
 		if [[ $opt =~ ^opt_list_ ]]; then
-			local listValue=();
-			local singleValue='';
-			while [[ "$envValue" =~ : ]]; do
-				singleValue="${envValue%%:*}";
-				envValue="${envValue#*:}"; # Remove first segment from colon-delimited list.
-				if [[ -z "$singleValue" ]]; then
-					continue;
-				fi
-				listValue+=("$singleValue");
-			done
-			listValue+=("${envValue}");
-			if eval "${opt}=(\"\${listValue[@]}\")"; then
-				whisper 1 "${opt} == (${listValue[*]}) # from ${envVarName}";
+			if getArrayFromColonList $opt "$newValue"; then
+				whisper 1 "✓ ${opt}: (${#listValue[@]})[${listValue[*]}] # from ${fromVarName}";
+			else
+				yell "✗ Unable to parse colon-separated list from env var '${fromVarName}'.";
 			fi
 		else
-			eval "${opt}=\"\$envValue\"";
-			whisper 1 "${opt} == \"${envValue}\" # from ${envVarName}";
+			eval "${opt}=\"\$newValue\"";
+			whisper 1 "✓ ${opt}: \"${newValue}\" # from ${fromVarName}";
 		fi
 	done
-	[[ ${#missingEnv[@]} -gt 0 ]] && whisper 2 "No env vars for options: ${missingEnv[*]}";
+	[[ ${#missingEnv[@]} -gt 0 ]] && whisper 2 "✗ No env vars for options: ${missingEnv[*]}";
 }
-
-getOptsFromEnv;
 
 
 ## EXECUTION
 
+getOptsFromEnv;
 inputDirectories=();
 while [[ $# -gt 0 ]]; do
 	case "$1" in
