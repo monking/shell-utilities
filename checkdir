@@ -2,7 +2,7 @@
 # Author: Christopher Lovejoy <c@lovejoy.io>
 
 
-## PLUMBING
+## PLUMBING:
 
 yell() { echo "$@" >&2; }
 die() { yell "$@"; exit 111; }
@@ -10,7 +10,7 @@ must() { "$@" || die "cannot $*"; }
 whisper() { local volume=$1; shift; [[ $opt_verbose -ge $volume ]] && yell "$@"; }
 
 
-## CONST/CONFIGURATION
+## CONST/CONFIGURATION:
 
 if [[ -z "$TMPDIR" || ! -d "$TMPDIR" ]]; then
 	if [[ -d '/dev/shm' ]]; then
@@ -21,24 +21,7 @@ if [[ -z "$TMPDIR" || ! -d "$TMPDIR" ]]; then
 fi
 
 
-## DEPENDENCIES
-
-SUM_COMMAND=(sha256sum)
-if ! command -v sha256sum &>/dev/null; then
-	if command -v shasum &>/dev/null; then
-		SUM_COMMAND=(shasum -a 256)
-	else
-		die "Missing checksum software: sha256sum or shasum."
-	fi
-fi
-whisper 1 "Using $(which "${SUM_COMMAND[0]}")";
-
-
-## 
-
-
-
-## DOCUMENTATION
+## DOCUMENTATION:
 
 
 SCRIPT_USAGE="${0##*/} [OPTIONS] [SUMFILE]"
@@ -50,6 +33,7 @@ SCRIPT_DESCRIPTION_LINES=(
 	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
+	"0.0.4 @1669927062  Detect sum algorithm from sum filename (supported: '*B2*' => b2; all else => sha256)"
 	"0.0.3 @1666205166  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
 	"0.0.2 @1664215277  Added help."
 	"0.0.1 @1664175524"
@@ -57,7 +41,7 @@ SCRIPT_VERSIONS=(
 SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}"
 
 
-## METHODS
+## METHODS:
 
 showHelp() {
 	echo "USAGE: $SCRIPT_USAGE";
@@ -95,10 +79,32 @@ confirm() {
 	fi
 }
 
+initializeSumCommand() {
+	# NOTE: Each command MUST support the '-c SUMFILE' option.
+	case $opt_algorithm in
+		sha*) sumCommand=(sha256sum);
+			if ! command -v sha256sum &>/dev/null; then
+				if command -v shasum &>/dev/null; then
+					sumCommand=(shasum -a 256);
+				else
+					die "Missing checksum software: sha256sum or shasum.";
+				fi
+			fi
+			;;
+		b2*|blake*) sumCommand=(b2sum);;
+		*) die "Unknown sum algorithm '${opt_algorithm}'.";;
+	esac
+	if command -v shasum &>/dev/null; then
+		whisper 1 "Using $(which "${sumCommand[0]}")";
+	else
+		die "Missing checksum software: ${sumCommand[0]}.";
+	fi
+}
+
 getSumFile() {
 	local match;
-	match="$(ls -1t .*SHA256SUM* 2>/dev/null)" \
-		|| match="$(ls -t *SHA256SUM* 2>/dev/null)" \
+	match="$(ls -1t .*SUM* 2>/dev/null)" \
+		|| match="$(ls -t *SUM* 2>/dev/null)" \
 		|| return $?;
 
 	echo -en "$match" | head -1
@@ -123,9 +129,17 @@ main() {
 	if [[ -z "$sumFile" ]]; then
 		sumFile="$(getSumFile)" || die "No hash file to check against. Run sumdir to make one.";
 	fi
+
+	if [[ $sumFile =~ [bB]2 ]]; then
+		opt_algorithm=b2;
+	else
+		opt_algorithm=sha256;
+	fi
+	initializeSumCommand;
+
 	checkOutputCacheFile="${TMPDIR}/.checking.${sumFile}.${RANDOM}.log";
 	yell "Checking files against $sumFile ($(describeSumFile "$sumFile"))";
-	checkOutput="$("${SUM_COMMAND[@]}" -c "$sumFile")";
+	checkOutput="$("${sumCommand[@]}" -c "$sumFile")";
 	checkStatus=$?;
 	if echo "$checkOutput" \
 		| tee "${checkOutputCacheFile}" \
@@ -134,7 +148,9 @@ main() {
 		yell "(Showing only failures…)"
 		[[ -t 0 ]] \
 			&& confirm "See full output?" 'n' \
-			&& cat <(echo "### output from '${SUM_COMMAND[*]} -c':") "$checkOutputCacheFile" <(echo -e "\n### sum file data being checked:") "$sumFile" | less
+			&& cat <(echo "### output from '${sumCommand[*]} -c':") "$checkOutputCacheFile" <(echo -e "\n### sum file data being checked:") "$sumFile" | less
+	elif [[ $checkStatus != 0 ]]; then
+		yell "✗ Finished with problems.";
 	else
 		yell "✓ All OK";
 	fi
@@ -144,10 +160,20 @@ main() {
 	return $checkStatus;
 }
 
-sumFileArgs=()
+
+
+## EXECUTION:
+
+opt_algorithm=sha256;
+opt_verbose=0;
+sumCommand=();
+sumFileArgs=();
+
 while [[ $# -gt 0 ]]; do
 	case $1 in
 		--help|help|-h) showHelp; exit;;
+		-a) opt_algorithm="$2"; shift;;
+		-v) let opt_verbose++;;
 		--version) echo "v${SCRIPT_VERSION%%  *} ($0)"; exit;;
 		*) sumFileArgs+=("$1");;
 	esac
