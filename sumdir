@@ -47,9 +47,11 @@ dereferenceSymlink() {
   fullPath "${linkPath}";
 }
 sumCommand=();
+checkCommand=();
 initializeSumCommand() {
-	case $opt_algorithm in
-		sha*) sumCommand=(sha256sum);
+	case ${opt_algorithm,,} in
+		sha*) opt_algorithm=sha256;
+			sumCommand=(sha256sum);
 			if ! command -v sha256sum &>/dev/null; then
 				if command -v shasum &>/dev/null; then
 					sumCommand=(shasum -a 256);
@@ -57,9 +59,19 @@ initializeSumCommand() {
 					die "Missing checksum software: sha256sum or shasum.";
 				fi
 			fi
+			checkCommand=("${sumCommand[@]}");
+			if [[ ${#opt_list_sha_opts[@]} -gt 0 ]]; then
+				sumCommand+=("${opt_list_sha_opts[@]}");
+			fi
 			;;
-		b2*|blake*) sumCommand=(b2sum);;
-		*) die "Unknown sum algorithm '${opt_algorithm}'.";;
+		b2*|blake*) opt_algorithm=b2;
+			sumCommand=(b2sum);
+			checkCommand=("${sumCommand[@]}");
+			if [[ ${#opt_list_b2_opts[@]} -gt 0 ]]; then
+				sumCommand+=("${opt_list_b2_opts[@]}");
+			fi
+			;;
+		*) die "Unknown sum algorithm '${opt_algorithm}'. Aborting for safety.";;
 	esac
 	if command -v shasum &>/dev/null; then
 		whisper 1 "Using $(which "${sumCommand[0]}")";
@@ -91,7 +103,8 @@ opt_algorithm
 opt_date_format
 opt_list_exclude_name
 opt_list_exclude_path
-opt_list_sum_opts
+opt_list_b2_opts
+opt_list_sha_opts
 opt_output_file_template
 opt_should_dereference
 opt_should_include_location_in_output
@@ -131,7 +144,7 @@ SCRIPT_OPTIONS=(
 	"-X|--exclude-path PATTERN  Exclude files by name, per find '! -path PATTERN'; usually of form '*PATTERN*'"
 	"--length N         Digest length in bits (b2sum only). Digests appear 1/4 this length in hexadecimal."
 	"                    Default and maximum is 512 (for an output 128 chars long)."
-	"                    This is the same as setting the env var SUMDIR_OPT_LIST_SUM_OPTS='--length:N'."
+	"                    This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
 	"--                 After this, all further arguments are passed to 'find'"
 	"--bk               Same as -f '${OPT_OUTPUT_FILE_TEMPLATE_BK}'"
 	"--version          Output version information"
@@ -161,7 +174,7 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
-	"0.1.1  @1669930147  Add '--length N' option (currently for b2sum only)."
+	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only)."
 	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names."
 	"0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value."
 	"0.0.8  @1669653009  Add support for multiple optional PATH arguments."
@@ -275,7 +288,7 @@ while [[ $# -gt 0 ]]; do
 		-f|--dateformat) opt_date_format="$2"; shift;;
 		-v|--verbose) let opt_verbose++;;
 		--verbose=*) opt_verbose=${1#*=};;
-		--length) opt_list_sum_opts+=(--length $2); shift;;
+		--length) opt_list_b2_opts+=(--length $2); shift;;
 		-x|--exclude) opt_list_exclude_name+=("$2"); shift;;
 		-X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
 		--) shift; break;;
@@ -347,8 +360,8 @@ for dir in "${inputDirectories[@]}"; do
 	whisper 1 "\$ find ${findArgs[*]}";
 	{
 		echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${CALLED_AS_WITH_ARGS}\`)";
-		echo "# Same as:  ${sumCommand[*]} ${opt_list_sum_opts[*]} FILENAMES";
-		echo "# To check file integrity, run:  ${sumCommand[*]} -c ${outputFilename}";
+		echo "# Same as:  ${sumCommand[*]} FILENAMES";
+		echo "# To check file integrity, run:  ${checkCommand[*]} -c ${outputFilename}";
 		if [[ $opt_should_include_location_in_output == true ]]; then
 			dirPath="${PWD}"
 			if [[ $opt_should_dereference == true ]]; then
@@ -364,7 +377,7 @@ for dir in "${inputDirectories[@]}"; do
 			# | perl -pe 's/^\.\///' \ # untested @1666202382
 		must find "${findArgs[@]}" \
 			| perl -pe 's/(^|\x00)\.\//\1/g' \
-			| xargs -0 "${sumCommand[@]}" "${opt_list_sum_opts[@]}";
+			| xargs -0 "${sumCommand[@]}";
 	} > "${outputFilename}";
 	sumStatus=$?;
 	yell "Generated ${dir}/${outputFilename}";

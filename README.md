@@ -45,7 +45,7 @@ OPTIONS:
                       usually of form '*PATTERN*'
   --length N         Digest length in bits (b2sum only). Digests appear 1/4 this length in hexadecimal.
                       Default and maximum is 512 (for an output 128 chars long).
-                      This is the same as setting the env var SUMDIR_OPT_LIST_SUM_OPTS='--length:N'.
+                      This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'.
   --                 After this, all further arguments are passed to 'find'
   --bk               Same as -f '%d..%ASUM'
   --version          Output version information
@@ -72,7 +72,8 @@ DESCRIPTION:
    SUMDIR_DATE_FORMAT='+%Y%m%dT%H%M%SZ'
    SUMDIR_LIST_EXCLUDE_NAME='.DS_Store:.thumbnails'
    SUMDIR_LIST_EXCLUDE_PATH='*/.git/*:*/node_modules/*'
-   SUMDIR_LIST_SUM_OPTS
+   SUMDIR_LIST_B2_OPTS
+   SUMDIR_LIST_SHA_OPTS
    SUMDIR_OUTPUT_FILE_TEMPLATE='.SUM%A--%d'
    SUMDIR_SHOULD_DEREFERENCE='false'
    SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT='false'
