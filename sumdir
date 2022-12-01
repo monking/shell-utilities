@@ -83,20 +83,22 @@ DEFAULT_SHOULD_SINGLE_HASH_FILE=false;
 DEFAULT_TIMEZONE=UTC;
 DEFAULT_VERBOSE=0;
 
-CALLED_AS_WITH_ARGS="${0##*/} $*";
+SCRIPT_NAME="${0##*/}";
+CALLED_AS_WITH_ARGS="${SCRIPT_NAME} $*";
 OPT_OUTPUT_FILE_TEMPLATE_BK='%d..%ASUM';
 OPT_VAR_NAMES=(
-opt_verbose # check verbose first
 opt_algorithm
 opt_date_format
 opt_list_exclude_name
 opt_list_exclude_path
+opt_list_sum_opts
 opt_output_file_template
 opt_should_dereference
 opt_should_include_location_in_output
 opt_should_recurse
 opt_should_single_hash_file
 opt_timezone
+opt_verbose # check verbose first
 );
 getDefaultOptName() {
 	local opt="$1";
@@ -127,6 +129,9 @@ SCRIPT_OPTIONS=(
 	"--verbose=N        Set the verbose level"
 	"-x|--exclude PATTERN   Exclude files by name, per find '! -name PATTERN'"
 	"-X|--exclude-path PATTERN  Exclude files by name, per find '! -path PATTERN'; usually of form '*PATTERN*'"
+	"--length N         Digest length in bits (b2sum only). Digests appear 1/4 this length in hexadecimal."
+	"                    Default and maximum is 512 (for an output 128 chars long)."
+	"                    This is the same as setting the env var SUMDIR_OPT_LIST_SUM_OPTS='--length:N'."
 	"--                 After this, all further arguments are passed to 'find'"
 	"--bk               Same as -f '${OPT_OUTPUT_FILE_TEMPLATE_BK}'"
 	"--version          Output version information"
@@ -156,6 +161,7 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
+	"0.1.1  @1669930147  Add '--length N' option (currently for b2sum only)."
 	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names."
 	"0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value."
 	"0.0.8  @1669653009  Add support for multiple optional PATH arguments."
@@ -167,6 +173,7 @@ SCRIPT_VERSIONS=(
 	"0.0.1  @1664175274"
 );
 SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}";
+SCRIPT_VERSION_NICE="v${SCRIPT_VERSION%%  *}";
 
 showHelp() {
 	echo "USAGE: $SCRIPT_USAGE";
@@ -186,23 +193,24 @@ showHelp() {
 removeFilesByTemplate() {
 	local template="$1";
 
-	whisper 2 "template: ${template}";
+	whisper 2 "Output filename template: ${template}";
 	local templateStar="${template//\{\}/*}";
 	templateStar="${templateStar//%d/*}";
 	templateStar="${templateStar//%a/$opt_algorithm}";
 	templateStar="${templateStar//%A/${opt_algorithm^^}}";
-	whisper 2 "templateStar: ${templateStar}";
+	whisper 2 "Pattern for files to remove: ${templateStar}";
 	local oIFS="$IFS";
 	local IFS='*';
 	local templateParts=($templateStar);
 	if [[ -n ${templateParts[-1]} && $templateStar =~ \*$ ]]; then
 		templateParts+=("");
 	fi
-	whisper 2 "templateParts(${#templateParts[@]}): ${templateParts[*]}";
 	IFS="$oIFS";
 
 	local removeCommand=trash;
 	command -v "$removeCommand" &>/dev/null || removeCommand=rm;
+
+	whisper 1 "$ $removeCommand $templateStar";
 
 	case ${#templateParts[@]} in
 		0) whisper 1 "No non-wildcard part of name template to glob by, for removing previous output sum files."; return 1;;
@@ -267,11 +275,12 @@ while [[ $# -gt 0 ]]; do
 		-f|--dateformat) opt_date_format="$2"; shift;;
 		-v|--verbose) let opt_verbose++;;
 		--verbose=*) opt_verbose=${1#*=};;
+		--length) opt_list_sum_opts+=(--length $2); shift;;
 		-x|--exclude) opt_list_exclude_name+=("$2"); shift;;
 		-X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
 		--) shift; break;;
 		--bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
-		--version) echo "v${SCRIPT_VERSION%%  *} ($0)"; whisper 1 "${SCRIPT_VERSION#*  }"; exit;;
+		--version) echo "${SCRIPT_VERSION_NICE} ($0)"; whisper 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
 		*) inputDirectories+=("$1");;
 	esac
 	shift;
@@ -337,7 +346,8 @@ for dir in "${inputDirectories[@]}"; do
 
 	whisper 1 "\$ find ${findArgs[*]}";
 	{
-		echo "# Generated ${date} by:  ${CALLED_AS_WITH_ARGS}";
+		echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${CALLED_AS_WITH_ARGS}\`)";
+		echo "# Same as:  ${sumCommand[*]} ${opt_list_sum_opts[*]} FILENAMES";
 		echo "# To check file integrity, run:  ${sumCommand[*]} -c ${outputFilename}";
 		if [[ $opt_should_include_location_in_output == true ]]; then
 			dirPath="${PWD}"
@@ -354,7 +364,7 @@ for dir in "${inputDirectories[@]}"; do
 			# | perl -pe 's/^\.\///' \ # untested @1666202382
 		must find "${findArgs[@]}" \
 			| perl -pe 's/(^|\x00)\.\//\1/g' \
-			| xargs -0 "${sumCommand[@]}";
+			| xargs -0 "${sumCommand[@]}" "${opt_list_sum_opts[@]}";
 	} > "${outputFilename}";
 	sumStatus=$?;
 	yell "Generated ${dir}/${outputFilename}";
