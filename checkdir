@@ -1,0 +1,183 @@
+#!/bin/bash
+# Author: Christopher Lovejoy <c@lovejoy.io>
+
+
+## PLUMBING:
+
+yell() { echo "$@" >&2; }
+die() { yell "$@"; exit 111; }
+must() { "$@" || die "cannot $*"; }
+whisper() { local volume=$1; shift; [[ $opt_verbose -ge $volume ]] && yell "$@"; }
+
+
+## CONST/CONFIGURATION:
+
+if [[ -z "$TMPDIR" || ! -d "$TMPDIR" ]]; then
+	if [[ -d '/dev/shm' ]]; then
+		export TMPDIR='/dev/shm';
+	else
+		export TMPDIR="$PWD";
+	fi
+fi
+
+
+## DOCUMENTATION:
+
+
+SCRIPT_USAGE="${0##*/} [OPTIONS] [SUMFILE]"
+SCRIPT_OPTIONS=(
+	"--help|help|-h  Show this help"
+	"--version       Show the script version"
+)
+SCRIPT_DESCRIPTION_LINES=(
+	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed, and the newest one is used."
+)
+SCRIPT_VERSIONS=(
+	"0.0.4 @1669927062  Detect sum algorithm from sum filename (supported: '*B2*' => b2; all else => sha256)"
+	"0.0.3 @1666205166  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
+	"0.0.2 @1664215277  Added help."
+	"0.0.1 @1664175524"
+)
+SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}"
+
+
+## METHODS:
+
+showHelp() {
+	echo "USAGE: $SCRIPT_USAGE";
+	echo "";
+	echo "OPTIONS:";
+	local opt;
+	for opt in "${SCRIPT_OPTIONS[@]}"; do
+		echo "  ${opt}"
+	done
+	echo "";
+	echo "DESCRIPTION:";
+	for line in "${SCRIPT_DESCRIPTION_LINES[@]}"; do
+		echo "  ${line}"
+	done
+}
+
+confirm() {
+	local prompt="$1";
+	local answer="$2";
+	local REPLY;
+	local defaultYes=true
+	if [[ $answer =~ [Nn] ]]; then
+		defaultYes=false
+		options='y/N'
+	else
+		options='Y/n'
+	fi
+	read -n1 -p "${prompt} (${options}) ";
+	if [[ $defaultYes == true ]]; then
+		[[ -z $REPLY || $REPLY =~ [Yy] ]];
+		return
+	else
+		[[ $REPLY =~ [Yy] ]];
+		return
+	fi
+}
+
+initializeSumCommand() {
+	# NOTE: Each command MUST support the '-c SUMFILE' option.
+	case ${opt_algorithm,,} in
+		sha*) sumCommand=(sha256sum);
+			if ! command -v sha256sum &>/dev/null; then
+				if command -v shasum &>/dev/null; then
+					sumCommand=(shasum -a 256);
+				else
+					die "Missing checksum software: sha256sum or shasum.";
+				fi
+			fi
+			;;
+		b2*|blake*) sumCommand=(b2sum);;
+		*) die "Unknown sum algorithm '${opt_algorithm}'.";;
+	esac
+	if command -v shasum &>/dev/null; then
+		whisper 1 "Using $(which "${sumCommand[0]}")";
+	else
+		die "Missing checksum software: ${sumCommand[0]}.";
+	fi
+}
+
+getSumFile() {
+	local match;
+	match="$(ls -1t .*SUM* 2>/dev/null)" \
+		|| match="$(ls -t *SUM* 2>/dev/null)" \
+		|| return $?;
+
+	echo -en "$match" | head -1
+}
+
+describeSumFile() {
+	local sumfile="$1"
+	local fileCount="$(grep -Ecv '^\s*(#.*)\s*$' "$sumfile")"
+	local dirCount="$(grep -Ec '^[a-f0-9]+  .*/' "$sumfile")"
+
+	local description="${fileCount} files"
+
+	if [[ $dirCount -gt 0 ]]; then
+		description+="; descends into directories"
+	fi
+
+	echo -n "$description"
+}
+
+main() {
+	local sumFile="$1";
+	if [[ -z "$sumFile" ]]; then
+		sumFile="$(getSumFile)" || die "No hash file to check against. Run sumdir to make one.";
+	fi
+
+	if [[ $sumFile =~ [bB]2 ]]; then
+		opt_algorithm=b2;
+	else
+		opt_algorithm=sha256;
+	fi
+	initializeSumCommand;
+
+	checkOutputCacheFile="${TMPDIR}/.checking.${sumFile}.${RANDOM}.log";
+	yell "Checking files against $sumFile ($(describeSumFile "$sumFile"))";
+	checkOutput="$("${sumCommand[@]}" -c "$sumFile")";
+	checkStatus=$?;
+	if echo "$checkOutput" \
+		| tee "${checkOutputCacheFile}" \
+		| grep 'FAILED'; then
+		yell "";
+		yell "(Showing only failures…)"
+		[[ -t 0 ]] \
+			&& confirm "See full output?" 'n' \
+			&& cat <(echo "### output from '${sumCommand[*]} -c':") "$checkOutputCacheFile" <(echo -e "\n### sum file data being checked:") "$sumFile" | less
+	elif [[ $checkStatus != 0 ]]; then
+		yell "✗ Finished with problems.";
+	else
+		yell "✓ All OK";
+	fi
+
+	[[ -e "$checkOutputCacheFile" ]] && rm "$checkOutputCacheFile"
+
+	return $checkStatus;
+}
+
+
+
+## EXECUTION:
+
+opt_algorithm=sha256;
+opt_verbose=0;
+sumCommand=();
+sumFileArgs=();
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		--help|help|-h) showHelp; exit;;
+		-a) opt_algorithm="$2"; shift;;
+		-v) let opt_verbose++;;
+		--version) echo "v${SCRIPT_VERSION%%  *} ($0)"; exit;;
+		*) sumFileArgs+=("$1");;
+	esac
+	shift;
+done
+
+main "${sumFileArgs[@]}";
