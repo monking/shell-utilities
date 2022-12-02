@@ -62,8 +62,8 @@ TODO['writeLocalPlaylist']="writeLocalPlaylist() is disabled, because its regula
   # }
 
   getVideoIdsFromPlaylistJson() {
-		todo "Where are the videos?" # 2021-01-22 upgrading comment to log
-    echo "$1" | json
+		todo "Where are the videos?";
+		return 1;
   }
 
 	downloadVideoFiles() {

@@ -1,16 +1,20 @@
 #!/bin/bash
 
+fullPath() {
+	local inputPath="$1";
+	echo "$(cd "${inputPath%/*}" &>/dev/null && echo -n "${PWD}/${inputPath##*/}")";
+}
 dereferenceSymlink() {
-  local linkPath="$1";
-  local realPath;
-  while [ -L "$linkPath" ]; do
-    realPath="$(readlink "${linkPath}")";
-    if [ ${realPath:0:1} != '/' ]; then
-      realPath="$(dirname "${linkPath}")/${realPath}";
-    fi
-    linkPath="${realPath}";
-  done
-  fullPath "${linkPath}";
+	local linkPath="$1";
+	local realPath;
+	while [ -L "$linkPath" ]; do
+		realPath="$(readlink "${linkPath}")";
+		if [ ${realPath:0:1} != '/' ]; then
+			realPath="$(dirname "${linkPath}")/${realPath}";
+		fi
+		linkPath="${realPath}";
+	done
+	fullPath "${linkPath}";
 }
 
 for l in "$@"; do
