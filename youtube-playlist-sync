@@ -1,198 +1,209 @@
 #!/bin/bash
 
-{ # functions
-  feedback() {
-    1>&2 echo "$@"
-  }
 
-  showHelp() {
-    feedback -e \
-      "\n  -l URL  Playlist URL (required). You can use this option multiple times to add multiple lists to one collection." \
-      "\n  -d DIR  Path to the directory in which to download the files. (required)" \
-      "\n  -f FMT  Choose the format (FMT) to download. See FORMAT SELECTION in the youtube-dl manual." \
-      "\n  -h      Show this help." \
-      "\n  -a EXT  Convert downloaded files to anaudio format (generally 'ogg', or 'mp3')." \
-      "\n  -v      Show verbose output, though logs on file will still be concise (this is useful for debugging, or if you want to save the full output yourself." \
-      "\n  -x MAX  Maximum number of files to keep. 0 means no limit. Default is 50." \
-      "\n\n  Any further options will be passed directly to youtube-dl."
-  }
+## FUNCTIONS:
 
-	nice() {
-		cat | perl -pe 's/[^A-Za-z0-9-]+/_/g | s/_$//'
-	}
-
-	log() {
-		local file="$1"
-		if $verbose; then
-			tee -a "$file"
-		else
-			cat >> "$file"
-		fi
-	}
-
-  # # Gets JSON data for all videos in the playlist, not for the playlist
-  # # itself.
-  # # The result is not collected into an array: just JSON objects separated by
-  # # newlines.
-  # getPlaylistDataJson() {
-  #   youtube-dl -j "$1"
-  # }
-
-  getVideoIdsFromPlaylistJson() {
-    echo "$1" | json # TODO: where are the videos?
-  }
-
-	downloadVideoFiles() {
-		local playlistUrl flag OPTARG OPTIND
-		while getopts l:u: flag; do
-			case $flag in
-				u) playlistUrl="$OPTARG";;
-			esac
-		done
-		shift $((OPTIND - 1))
-
-    local youtubeDlOptions=()
-
-    [[ -n $audioFormat ]] && youtubeDlOptions+=(--extract-audio --audio-format "$audioFormat")
-
-    [[ $maxFiles != 0 ]] && youtubeDlOptions+=(--playlist-reverse --max-downloads "$maxFiles")
-
-    # download 2 videos:
-    # 1. simply the best video + audio
-    # 2. best video smaller than 1080 (for playback on phone, weaker device) + best audio
-    youtubeDlOptions+=(--format "$format")
-
-    # keep track of which media have been dowloaded, so that they can be
-    # skipped when checking the playlist again. Also avoid overwriting files if
-    # re-downloading a file (by removing or commenting it out from the archive
-    # log).
-    youtubeDlOptions+=(--download-archive "$downloadArchivePath" --no-overwrites)
-
-    youtubeDlOptions+=(--no-progress --no-warnings --ignore-errors --no-call-home)
-
-    youtubeDlOptions+=(--write-sub --write-auto-sub --embed-subs --sub-format srt) # take what we can get
-
-    # --output template: https://github.com/ytdl-org/youtube-dl/blob/master/README.md#output-template
-    youtubeDlOptions+=(--output '%(upload_date)s.%(uploader)s.%(title)s.%(id)s.%(format)s.%(ext)s' --restrict-filenames)
-
-    youtubeDlOptions+=(--metadata-from-title "%(artist)s - %(title)s")
-
-    [[ ${#@} -gt 0 ]] && youtubeDlOptions+=("$@")
-
-    cd "$destinationDirectory"
-
-		local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
-    echo \$ "${youtubeDlCommand[@]}" >> "$tmpLogFile"
-    "${youtubeDlCommand[@]}" >> "$tmpLogFile"
-
-    if grep 'Download completed' "$tmpLogFile" &>/dev/null; then
-      # remove unnecessary lines from log
-      cat "$tmpLogFile" |
-        perl -pe 's/.*Downloading.*\n.*already been recorded.*\n//' |
-        log "$logFile"
-    else
-      echo "No new files" | log "$logFile"
-    fi
-
-		rm "$tmpLogFile"
-
-    echo -e "finished playlist download $(date --iso-8601=seconds)" | log "$logFile"
-  }
-
-	writeLocalPlaylist() {
-		local playlistUrl flag OPTARG OPTIND
-		while getopts l:u: flag; do
-			case $flag in
-				u) playlistUrl="$OPTARG";;
-			esac
-		done
-		shift $((OPTIND - 1))
-
-		feedback "Creating local playlist, mirroring remote."
-
-    cd "$destinationDirectory"
-
-    # local youtubeDlOptions=(--get-id)
-		# local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
-		# feedback "${youtubeDlCommand[@]}"
-		local playlistPageData="$(curl -s "$playlistUrl")"
-		local playlistTitle="$(echo -e "$playlistPageData" | grep '<title>' | perl -pe 's/^.*<title>([^<]+?)( - YouTube)?<\/title>.*/\1/')"
-		local localPlaylistPath="$destinationDirectory/$(echo "$playlistTitle" | nice).m3u8"
-		local videoIds=($(echo -e "$playlistPageData" | grep '<tr.*watch?v=' | perl -pe 's/^.*watch\?v=([^&]+).*/\1/'))
-
-		feedback "playlistTitle: $playlistTitle"
-		feedback "localPlaylistPath: $localPlaylistPath"
-		feedback "videoIds: ${videoIds[*]}"
-
-		local id localFile
-		local localFiles=()
-		for id in "${videoIds[@]}"; do
-			localFile="$(ls *".$id."* 2>/dev/null)"
-			[[ -n "$localFile" ]] && localFiles+=("$localFile")
-		done
-
-		if [[ ${#localFiles[@]} -gt 0 ]]; then
-			local playlistData
-			IFS=$'\n' playlistData="${localFiles[*]}"
-			echo "$playlistData" > "$localPlaylistPath"
-		fi
-  }
+feedback() {
+	1>&2 echo "$@"
 }
 
-{ # main
-  audioFormat=
-  maxFiles=0
-	shouldDownloadVideos=true
-  playlistUrls=()
-  verbose=false
+showHelp() {
+	feedback -e \
+		"\n  -l URL  Playlist URL (required). You can use this option multiple times to add multiple lists to one collection." \
+		"\n  -d DIR  Path to the directory in which to download the files. (required)" \
+		"\n  -f FMT  Choose the format (FMT) to download. See FORMAT SELECTION in the youtube-dl manual." \
+		"\n  -h      Show this help." \
+		"\n  -a EXT  Convert downloaded files to anaudio format (generally 'ogg', or 'mp3')." \
+		"\n  -v      Show verbose output, though logs on file will still be concise (this is useful for debugging, or if you want to save the full output yourself." \
+		"\n  -x MAX  Maximum number of files to keep. 0 means no limit. Default is 50." \
+		"\n\n  Any further options will be passed directly to youtube-dl."
+}
 
-  # download best (audio + video) at largets dimension _and_ 1080p (for not-awesome hardware)
-  # https://github.com/rg3/youtube-dl/blob/master/README.md#format-selection
-  # slashes: download one of the list of formats, prefering those first
-  # commas: download multiple formats
-  # parentheses: group selectors
-  # square brackets: format condition
-  format='bestvideo+bestaudio,bestvideo[height<=1080]+bestaudio'
+nice() {
+	cat | perl -pe 's/[^A-Za-z0-9-]+/_/g | s/_$//'
+}
 
-  while getopts a:d:Df:hl:n:vx: flag; do
-    case $flag in
-      a) audioFormat="$OPTARG";;
-      d) destinationDirectory="$OPTARG";;
-      D) shouldDownloadVideos=false;;
-      f) format="$OPTARG";;
-      h) showHelp;;
-      l) playlistUrls+=("$OPTARG");;
-      v) verbose=true;;
-      x) maxFiles="$OPTARG";;
-    esac
-  done
-  [[ $OPTIND -gt 1 ]] && shift $((OPTIND - 1))
+log() {
+	local file="$1"
+	if $verbose; then
+		tee -a "$file"
+	else
+		cat >> "$file"
+	fi
+}
 
-  [[ -n "${playlistUrls[*]}" && -n "$destinationDirectory" ]] || { showHelp; exit 1; }
+### Gets JSON data for all videos in the playlist, not for the playlist
+### itself.
+### The result is not collected into an array: just JSON objects separated by
+### newlines. This can be read by a tool like ['jq'](https://github.com/stedolan/jq).
+#getPlaylistDataJson() {
+#  youtube-dl -j "$1"
+#}
 
-  pidFile="$HOME/.youtube-playlist-sync.pid"
-  if [[ -f "$pidFile" ]]; then
-    feedback "An instance of youtube-playlist-sync is already running ($(cat "$pidFile"). If this is mistaken, delete '$pidFile'."
-    exit 2
-  fi
+getVideoIdsFromPlaylistJson() {
+	echo "$1" | json # TODO: where are the videos?
+}
 
-  echo $$ > "$pidFile"
+g_downloadArchivePath='';
+g_logFile='';
+g_tmpLogFile='';
+g_format='';
+downloadVideoFiles() {
+	local playlistUrl flag OPTARG OPTIND
+	while getopts l:u: flag; do
+		case $flag in
+			u) playlistUrl="$OPTARG";;
+		esac
+	done
+	shift $((OPTIND - 1))
 
-  metadataDirectory="$destinationDirectory/.youtube-playlist-sync"
-  mkdir -p "$metadataDirectory"
-	downloadArchivePath="$metadataDirectory/youtube-dl-archive"
-	logFile="$metadataDirectory/download.log"
-	tmpLogFile="$logFile.tmp"
+	local youtubeDlOptions=()
 
-	echo -e "\nstarting playlist download $(date --iso-8601=seconds)\n$playlistUrl" | log "$logFile"
+	[[ -n $audioFormat ]] && youtubeDlOptions+=(--extract-audio --audio-format "$audioFormat")
 
-  for playlistUrl in "${playlistUrls[@]}"; do
-    echo "$playlistUrl" > "$metadataDirectory/playlist.url"
+	[[ $maxFiles != 0 ]] && youtubeDlOptions+=(--playlist-reverse --max-downloads "$maxFiles")
+
+	# download 2 videos:
+	# 1. simply the best video + audio
+	# 2. best video smaller than 1080 (for playback on phone, weaker device) + best audio
+	youtubeDlOptions+=(--format "$g_format")
+
+	# keep track of which media have been dowloaded, so that they can be
+	# skipped when checking the playlist again. Also avoid overwriting files if
+	# re-downloading a file (by removing or commenting it out from the archive
+	# log).
+	youtubeDlOptions+=(--download-archive "$g_downloadArchivePath" --no-overwrites)
+
+	youtubeDlOptions+=(--no-progress --no-warnings --ignore-errors --no-call-home)
+
+	youtubeDlOptions+=(--write-sub --write-auto-sub --embed-subs --sub-format srt) # take what we can get
+
+	# --output template: https://github.com/ytdl-org/youtube-dl/blob/master/README.md#output-template
+	youtubeDlOptions+=(--output '%(upload_date)s.%(uploader)s.%(title)s.%(id)s.%(format)s.%(ext)s' --restrict-filenames)
+
+	youtubeDlOptions+=(--metadata-from-title "%(artist)s - %(title)s")
+
+	[[ ${#@} -gt 0 ]] && youtubeDlOptions+=("$@")
+
+	cd "$g_destinationDirectory"
+
+	local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
+	echo \$ "${youtubeDlCommand[@]}" >> "$g_tmpLogFile"
+	"${youtubeDlCommand[@]}" >> "$g_tmpLogFile"
+
+	if grep 'Download completed' "$g_tmpLogFile" &>/dev/null; then
+		# remove unnecessary lines from log
+		cat "$g_tmpLogFile" |
+			perl -pe 's/.*Downloading.*\n.*already been recorded.*\n//' |
+			log "$g_logFile"
+	else
+		echo "No new files" | log "$g_logFile"
+	fi
+
+	rm "$g_tmpLogFile"
+
+	echo -e "finished playlist download $(date --iso-8601=seconds)" | log "$g_logFile"
+}
+
+writeLocalPlaylist() {
+	local playlistUrl flag OPTARG OPTIND
+	while getopts l:u: flag; do
+		case $flag in
+			u) playlistUrl="$OPTARG";;
+		esac
+	done
+	shift $((OPTIND - 1))
+
+	feedback "Creating local playlist, mirroring remote."
+
+	cd "$g_destinationDirectory"
+
+	# local youtubeDlOptions=(--get-id)
+	# local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
+	# feedback "${youtubeDlCommand[@]}"
+	local playlistPageData="$(curl -s "$playlistUrl")"
+	local playlistTitle="$(echo -e "$playlistPageData" | grep '<title>' | perl -pe 's/^.*<title>([^<]+?)( - YouTube)?<\/title>.*/\1/')"
+	local localPlaylistPath="$g_destinationDirectory/$(echo "$playlistTitle" | nice).m3u8"
+	local videoIds=($(echo -e "$playlistPageData" | grep '<tr.*watch?v=' | perl -pe 's/^.*watch\?v=([^&]+).*/\1/'))
+
+	feedback "playlistTitle: $playlistTitle"
+	feedback "localPlaylistPath: $localPlaylistPath"
+	feedback "videoIds: ${videoIds[*]}"
+
+	local id localFile
+	local localFiles=()
+	for id in "${videoIds[@]}"; do
+		localFile="$(ls *".$id."* 2>/dev/null)"
+		[[ -n "$localFile" ]] && localFiles+=("$localFile")
+	done
+
+	if [[ ${#localFiles[@]} -gt 0 ]]; then
+		local playlistData
+		IFS=$'\n' playlistData="${localFiles[*]}"
+		echo "$playlistData" > "$localPlaylistPath"
+	fi
+}
+
+main() {
+	local audioFormat=
+	local maxFiles=0
+	local shouldDownloadVideos=true
+	local playlistUrls=()
+	local verbose=false
+
+	# download best (audio + video) at largets dimension _and_ 1080p (for not-awesome hardware)
+	# https://github.com/rg3/youtube-dl/blob/master/README.md#format-selection
+	# slashes: download one of the list of formats, prefering those first
+	# commas: download multiple formats
+	# parentheses: group selectors
+	# square brackets: format condition
+	g_format='bestvideo+bestaudio,bestvideo[height<=1080]+bestaudio';
+
+	while getopts a:d:Df:hl:n:vx: flag; do
+		case $flag in
+			a) audioFormat="$OPTARG";;
+			d) g_destinationDirectory="$OPTARG";;
+			D) shouldDownloadVideos=false;;
+			f) g_format="$OPTARG";;
+			h) showHelp;;
+			l) playlistUrls+=("$OPTARG");;
+			v) verbose=true;;
+			x) maxFiles="$OPTARG";;
+		esac
+	done
+	[[ $OPTIND -gt 1 ]] && shift $((OPTIND - 1))
+
+	[[ -n "${playlistUrls[*]}" && -n "$g_destinationDirectory" ]] || { showHelp; exit 1; }
+
+	local pidFile="$HOME/.youtube-playlist-sync.pid"
+	if [[ -f "$pidFile" ]]; then
+		feedback "An instance of youtube-playlist-sync is already running ($(cat "$pidFile"). If this is mistaken, delete '$pidFile'."
+		exit 2
+	fi
+
+	echo $$ > "$pidFile"
+
+	local metadataDirectory="$g_destinationDirectory/.youtube-playlist-sync"
+	mkdir -p "$metadataDirectory"
+	g_downloadArchivePath="$metadataDirectory/youtube-dl-archive"
+	g_logFile="$metadataDirectory/download.log"
+	g_tmpLogFile="$g_logFile.tmp"
+
+	echo -e "\nstarting playlist download $(date --iso-8601=seconds)\n$playlistUrl" | log "$g_logFile"
+
+	local playlistUrl;
+	for playlistUrl in "${playlistUrls[@]}"; do
+		echo "$playlistUrl" > "$metadataDirectory/playlist.url"
 
 		[[ $shouldDownloadVideos = true ]] && downloadVideoFiles -u "$playlistUrl" "$@"
-		writeLocalPlaylist -u "$playlistUrl" | log "$logFile"
-  done
+		writeLocalPlaylist -u "$playlistUrl" | log "$g_logFile"
+	done
 
-	[[ -f "$tmpLogFile" ]] && rm "$tmpLogFile"
-  rm "$pidFile"
+	[[ -f "$g_tmpLogFile" ]] && rm "$g_tmpLogFile"
+	rm "$pidFile"
 }
+
+
+## EXECUTION:
+
+main "$@";
