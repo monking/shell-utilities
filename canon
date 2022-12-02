@@ -1,4 +1,22 @@
 #!/bin/bash
 
-readlink -f "$@"
-# @1661958969 Suggestion: replace all 'canon' with 'readlink -f'.
+dereferenceSymlink() {
+  local linkPath="$1";
+  local realPath;
+  while [ -L "$linkPath" ]; do
+    realPath="$(readlink "${linkPath}")";
+    if [ ${realPath:0:1} != '/' ]; then
+      realPath="$(dirname "${linkPath}")/${realPath}";
+    fi
+    linkPath="${realPath}";
+  done
+  fullPath "${linkPath}";
+}
+
+for l in "$@"; do
+	dereferenceSymlink "$l";
+done
+
+## NOTES:
+# 2022-12-02 Preferring a Bash implementation for BSD compatibility.
+# 2022-08-31 Could replace all 'canon' with 'readlink -f' (on GNU systems).
