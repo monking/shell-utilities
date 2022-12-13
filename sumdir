@@ -14,6 +14,14 @@ getValueIfDefined() {
 	local status=$?;
 	return $status;
 }
+toLowerCase() {
+	#perl -C -lne 'print uc';
+	tr '[:upper:]' '[:lower:]';
+}
+toUpperCase() {
+	#perl -C -lne 'print uc';
+	tr '[:lower:]' '[:upper:]';
+}
 getArrayFromColonList() {
 	local varName="$1";
 	local colonValue="$2";
@@ -31,28 +39,29 @@ getArrayFromColonList() {
 	eval "${opt}=(\"\${listValue[@]}\")"
 }
 fullPath() {
-  local inputPath="$1";
-  echo "$(cd "${inputPath%/*}" &>/dev/null && echo -n "${PWD}/${inputPath##*/}")";
+	local inputPath="$1";
+	echo "$(cd "${inputPath%/*}" &>/dev/null && echo -n "${PWD}/${inputPath##*/}")";
 }
 dereferenceSymlink() {
-  local linkPath="$1";
-  local realPath;
-  while [ -L "$linkPath" ]; do
-    realPath="$(readlink "${linkPath}")";
-    if [ ${realPath:0:1} != '/' ]; then
-      realPath="$(dirname "${linkPath}")/${realPath}";
-    fi
-    linkPath="${realPath}";
-  done
-  fullPath "${linkPath}";
+	local linkPath="$1";
+	local realPath;
+	while [ -L "$linkPath" ]; do
+		realPath="$(readlink "${linkPath}")";
+		if [ ${realPath:0:1} != '/' ]; then
+			realPath="$(dirname "${linkPath}")/${realPath}";
+		fi
+		linkPath="${realPath}";
+	done
+	fullPath "${linkPath}";
 }
 sumCommand=();
 checkCommand=();
+g_algoUpper='';
 initializeSumCommand() {
-	case ${opt_algorithm,,} in
+	case "$(echo -n "$opt_algorithm" | toLowerCase)" in
 		sha*) opt_algorithm=sha256;
 			sumCommand=(sha256sum);
-			if ! command -v sha256sum &>/dev/null; then
+			if ! command -v ${sumCommand[0]} &>/dev/null; then
 				if command -v shasum &>/dev/null; then
 					sumCommand=(shasum -a 256);
 				else
@@ -73,11 +82,12 @@ initializeSumCommand() {
 			;;
 		*) die "Unknown sum algorithm '${opt_algorithm}'. Aborting for safety.";;
 	esac
-	if command -v shasum &>/dev/null; then
+	if command -v "${sumCommand[0]}" &>/dev/null; then
 		whisper 1 "Using $(which "${sumCommand[0]}")";
 	else
-		die "Missing checksum software: ${sumCommand[0]}.";
+		die "Missing selected checksum software: ${sumCommand[0]}.";
 	fi
+	g_algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
 }
 
 
@@ -115,13 +125,11 @@ opt_verbose # check verbose first
 );
 getDefaultOptName() {
 	local opt="$1";
-	echo -n "DEFAULT${opt#opt}" \
-		| perl -C -lne 'print uc';
+	echo -n "DEFAULT${opt#opt}" | toUpperCase;
 }
 getEnvOptName() {
 	local opt="$1";
-	echo -n "SUMDIR${opt#opt}" \
-		| perl -C -lne 'print uc';
+	echo -n "SUMDIR${opt#opt}" | toUpperCase;
 }
 
 
@@ -174,17 +182,19 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
-	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only)."
-	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names."
-	"0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value."
-	"0.0.8  @1669653009  Add support for multiple optional PATH arguments."
-	"0.0.7  @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
-	"0.0.6  @1664219098  Adding SUMDIR_* env config. Put directory path in output file, with option '-l'."
-	"0.0.4  @1664178613  Exclude .git contents."
-	"0.0.3  @1664177599  '-r' To let find go deep; args after -- go to find."
-	"0.0.2  @1664175862  Added --exclude PATTERN option."
-	"0.0.1  @1664175274"
+	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum:5252a8b4#l=32;size:11500" #volatile
+	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum:f6a28dc2#l=32;size:12099" #volatile
+	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names." #volatile
+	"0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value." #volatile
+	"0.0.8  @1669653009  Add support for multiple optional PATH arguments." #volatile
+	"0.0.7  @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #volatile
+	"0.0.6  @1664219098  Adding SUMDIR_* env config. Put directory path in output file, with option '-l'." #volatile
+	"0.0.4  @1664178613  Exclude .git contents." #volatile
+	"0.0.3  @1664177599  '-r' To let find go deep; args after -- go to find." #volatile
+	"0.0.2  @1664175862  Added --exclude PATTERN option." #volatile
+	"0.0.1  @1664175274" #volatile
 );
+## <data:application/vim+macro,mx%2FSCRIPT_VERSIONS%3D%0Dj%24F%22hvT%20c%12%3DTrim%28system%28%27sum-stream%27%2C%20join%28getline%281%2C%27%24%27%29%2C%22%5Cn%22%29%29%29%0D%1B%60x> ref:1670969781
 SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}";
 SCRIPT_VERSION_NICE="v${SCRIPT_VERSION%%  *}";
 
@@ -210,12 +220,13 @@ removeFilesByTemplate() {
 	local templateStar="${template//\{\}/*}";
 	templateStar="${templateStar//%d/*}";
 	templateStar="${templateStar//%a/$opt_algorithm}";
-	templateStar="${templateStar//%A/${opt_algorithm^^}}";
+	templateStar="${templateStar//%A/${g_algoUpper}}";
 	whisper 2 "Pattern for files to remove: ${templateStar}";
 	local oIFS="$IFS";
 	local IFS='*';
 	local templateParts=($templateStar);
-	if [[ -n ${templateParts[-1]} && $templateStar =~ \*$ ]]; then
+	local idxLastTemplatePart=$(( ${#templateParts[@]} - 1 )); # For Bash 3.2.x compatibility, rather than using index -1.
+	if [[ -n ${templateParts[$idxLastTemplatePart]} && $templateStar =~ \*$ ]]; then
 		templateParts+=("");
 	fi
 	IFS="$oIFS";
@@ -330,7 +341,7 @@ for dir in "${inputDirectories[@]}"; do
 	outputFilename="${opt_output_file_template/\{\}/$date}";
 	outputFilename="${outputFilename/\%d/$date}";
 	outputFilename="${outputFilename/\%a/$opt_algorithm}";
-	outputFilename="${outputFilename/\%A/${opt_algorithm^^}}";
+	outputFilename="${outputFilename/\%A/${g_algoUpper}}";
 
 	findArgs=();
 	if [[ $opt_should_dereference == true ]]; then
@@ -372,11 +383,12 @@ for dir in "${inputDirectories[@]}"; do
 			echo "# Location:  $(hostname):${dirPath}";
 		fi
 
-			## Pulling this convenience out for now, since it breaks compatibility. @1666202382
-			# | sed -z 's/^\.\///' \ # BSD sed doesn't have `-z` (sed --version)
-			# | perl -pe 's/^\.\///' \ # untested @1666202382
+		## Removing leading  `./` in paths.
+			#| sed -z 's/^\.\///' \ # BSD sed doesn't have `-z` (sed --version)
+			#| perl -pe 's/^\.\///' \ # untested @1666202382 # Pulling this convenience out for now, since it breaks compatibility.
+			#| perl -pe 's/(^|\x00)\.\//\1/g' \
 		must find "${findArgs[@]}" \
-			| perl -pe 's/(^|\x00)\.\//\1/g' \
+			| sed -E 's/(^|\x00)\.\//\1/g' \
 			| xargs -0 "${sumCommand[@]}";
 	} > "${outputFilename}";
 	sumStatus=$?;

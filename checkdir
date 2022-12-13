@@ -9,6 +9,15 @@ die() { yell "$@"; exit 111; }
 must() { "$@" || die "cannot $*"; }
 whisper() { local volume=$1; shift; [[ $opt_verbose -ge $volume ]] && yell "$@"; }
 
+toLowerCase() {
+	#perl -C -lne 'print uc';
+	tr '[:upper:]' '[:lower:]';
+}
+toUpperCase() {
+	#perl -C -lne 'print uc';
+	tr '[:lower:]' '[:upper:]';
+}
+
 
 ## CONST/CONFIGURATION:
 
@@ -30,17 +39,20 @@ SCRIPT_OPTIONS=(
 	"--version       Show the script version."
 	"-a              Set encryption algorithm."
 	"-e              Only check if files in SUMFILE exist, and output missing filenames."
+	"-l              Only output the SUMFILE path found/selected."
 	"-v              Show more verbose output."
 )
 SCRIPT_DESCRIPTION_LINES=(
 	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
-	"0.0.5 @1670874600  Allow checking only existence of files from SUMFILE (opt '-e').  b2sum:a4a54a563924caca275b3626734ee015,size:5205"
-	"0.0.4 @1669927062  Detect sum algorithm from sum filename (supported: '*B2*' => b2; all else => sha256)"
-	"0.0.3 @1666205166  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)"
-	"0.0.2 @1664215277  Added help."
-	"0.0.1 @1664175524"
+	"0.0.7 @1670970409  Improve POSIX/BSD portability.  b2sum:db71df2c#l=32;size:4959" #volatile
+	"0.0.6 @1670954755  Added option -l to output selected SUM file path.  b2sum:8e5df517#l=32;size:4800" #volatile
+	"0.0.5 @1670874600  Allow checking only existence of files from SUMFILE (opt '-e').  b2sum:a4a54a563924caca275b3626734ee015,size:5205" #volatile
+	"0.0.4 @1669927062  Detect sum algorithm from sum filename (supported: '*B2*' => b2; all else => sha256)" #volatile
+	"0.0.3 @1666205166  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #volatile
+	"0.0.2 @1664215277  Added help." #volatile
+	"0.0.1 @1664175524" #volatile
 )
 SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}"
 
@@ -85,7 +97,8 @@ confirm() {
 
 initializeSumCommand() {
 	# NOTE: Each command MUST support the '-c SUMFILE' option.
-	case ${opt_algorithm,,} in
+	opt_algorithm="$(echo "$opt_algorithm" | toLowerCase)";
+	case $opt_algorithm in
 		sha*) sumCommand=(sha256sum);
 			if ! command -v sha256sum &>/dev/null; then
 				if command -v shasum &>/dev/null; then
@@ -98,7 +111,7 @@ initializeSumCommand() {
 		b2*|blake*) sumCommand=(b2sum);;
 		*) die "Unknown sum algorithm '${opt_algorithm}'.";;
 	esac
-	if command -v shasum &>/dev/null; then
+	if command -v "${sumCommand[0]}" &>/dev/null; then
 		whisper 1 "Using $(which "${sumCommand[0]}")";
 	else
 		die "Missing checksum software: ${sumCommand[0]}.";
@@ -224,6 +237,7 @@ while [[ $# -gt 0 ]]; do
 		--help|help|-h) showHelp; exit;;
 		-a) opt_algorithm="$2"; shift;;
 		-e) opt_check_exists_only=true;;
+		-l) getSumFile; exit;;
 		-v) let opt_verbose++;;
 		--version) echo "v${SCRIPT_VERSION%%  *} ($0)"; exit;;
 		*) sumFileArgs+=("$1");;
@@ -235,4 +249,4 @@ main "${sumFileArgs[@]}";
 
 exit;
 
-## [sumthis (omitting comments)](data:text/x-shellscript,data%3D%22%24%28grep%20-v%20%27%5E%5Cs%2a%23%27%20.%2Fcheckdir%29%22%3B%0Asum%3D%22%24%28b2sum%20-l%20128%20%3C%28echo%20%22%24data%22%29%20%7C%20awk%20%27%7B%20print%20%241%20%7D%27%29%22%3B%0Asize%3D%28%24%28echo%20%22%24data%22%20%7C%20wc%20-c%29%29%3B%0Aecho%20%22b2sum%3A%24%7Bsum%7D%2Csize%3A%24%7Bsize%5B0%5D%7D%22%3B%0A "date-modified=20221212T130242-08")
+## [sumthis (omitting comments)](data:text/x-shellscript,data%3D%22$%28grep%20-v%20%27^%5Cs*$%5C|^%5Cs*%23%5C|%23%5B^%23%5D*volatile%5B^%23%5D*$%27%20./checkdir%29%22%3B%0Asum%3D%22$%28b2sum%20-l%20128%20%3C%28echo%20%22$data%22%29%20|%20awk%20%27{%20print%20$1%20}%27%29%22%3B%0Asize%3D%28$%28echo%20%22$data%22%20|%20wc%20-c%29%29%3B%0Aecho%20%22b2sum%3A${sum}%2Csize%3A${size%5B0%5D}%22%3B%0A "date-modified=20221213T100856-08")
