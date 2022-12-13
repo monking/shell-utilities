@@ -182,17 +182,17 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
-	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum:5252a8b4#l=32;size:11500" #volatile
-	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum:f6a28dc2#l=32;size:12099" #volatile
-	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names." #volatile
-	"0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value." #volatile
-	"0.0.8  @1669653009  Add support for multiple optional PATH arguments." #volatile
-	"0.0.7  @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #volatile
-	"0.0.6  @1664219098  Adding SUMDIR_* env config. Put directory path in output file, with option '-l'." #volatile
-	"0.0.4  @1664178613  Exclude .git contents." #volatile
-	"0.0.3  @1664177599  '-r' To let find go deep; args after -- go to find." #volatile
-	"0.0.2  @1664175862  Added --exclude PATTERN option." #volatile
-	"0.0.1  @1664175274" #volatile
+	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum:5252a8b4#l=32;size:11500" #nosum
+	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum:f6a28dc2#l=32;size:12099" #nosum
+	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names." #nosum
+	"0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value." #nosum
+	"0.0.8  @1669653009  Add support for multiple optional PATH arguments." #nosum
+	"0.0.7  @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #nosum
+	"0.0.6  @1664219098  Adding SUMDIR_* env config. Put directory path in output file, with option '-l'." #nosum
+	"0.0.4  @1664178613  Exclude .git contents." #nosum
+	"0.0.3  @1664177599  '-r' To let find go deep; args after -- go to find." #nosum
+	"0.0.2  @1664175862  Added --exclude PATTERN option." #nosum
+	"0.0.1  @1664175274" #nosum
 );
 ## <data:application/vim+macro,mx%2FSCRIPT_VERSIONS%3D%0Dj%24F%22hvT%20c%12%3DTrim%28system%28%27sum-stream%27%2C%20join%28getline%281%2C%27%24%27%29%2C%22%5Cn%22%29%29%29%0D%1B%60x> ref:1670969781
 SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}";

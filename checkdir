@@ -46,13 +46,13 @@ SCRIPT_DESCRIPTION_LINES=(
 	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
-	"0.0.7 @1670970409  Improve POSIX/BSD portability.  b2sum:db71df2c#l=32;size:4959" #volatile
-	"0.0.6 @1670954755  Added option -l to output selected SUM file path.  b2sum:8e5df517#l=32;size:4800" #volatile
-	"0.0.5 @1670874600  Allow checking only existence of files from SUMFILE (opt '-e').  b2sum:a4a54a563924caca275b3626734ee015,size:5205" #volatile
-	"0.0.4 @1669927062  Detect sum algorithm from sum filename (supported: '*B2*' => b2; all else => sha256)" #volatile
-	"0.0.3 @1666205166  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #volatile
-	"0.0.2 @1664215277  Added help." #volatile
-	"0.0.1 @1664175524" #volatile
+	"0.0.7 @1670970409  Support for Bash 3.2.x; require tr instead of perl.  b2sum:db71df2c#l=32;size:4959" #nosum
+	"0.0.6 @1670954755  Added option -l to output selected SUM file path.  b2sum:8e5df517#l=32;size:4800" #nosum
+	"0.0.5 @1670874600  Allow checking only existence of files from SUMFILE (opt '-e').  b2sum:a4a54a563924caca275b3626734ee015,size:5205" #nosum
+	"0.0.4 @1669927062  Detect sum algorithm from sum filename (supported: '*B2*' => b2; all else => sha256)" #nosum
+	"0.0.3 @1666205166  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #nosum
+	"0.0.2 @1664215277  Added help." #nosum
+	"0.0.1 @1664175524" #nosum
 )
 SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}"
 
@@ -248,5 +248,3 @@ done
 main "${sumFileArgs[@]}";
 
 exit;
-
-## [sumthis (omitting comments)](data:text/x-shellscript,data%3D%22$%28grep%20-v%20%27^%5Cs*$%5C|^%5Cs*%23%5C|%23%5B^%23%5D*volatile%5B^%23%5D*$%27%20./checkdir%29%22%3B%0Asum%3D%22$%28b2sum%20-l%20128%20%3C%28echo%20%22$data%22%29%20|%20awk%20%27{%20print%20$1%20}%27%29%22%3B%0Asize%3D%28$%28echo%20%22$data%22%20|%20wc%20-c%29%29%3B%0Aecho%20%22b2sum%3A${sum}%2Csize%3A${size%5B0%5D}%22%3B%0A "date-modified=20221213T100856-08")
