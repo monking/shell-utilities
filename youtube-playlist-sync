@@ -11,12 +11,12 @@ showHelp() {
 	feedback -e \
 		"\n  -l URL  Playlist URL (required). You can use this option multiple times to add multiple lists to one collection." \
 		"\n  -d DIR  Path to the directory in which to download the files. (required)" \
-		"\n  -f FMT  Choose the format (FMT) to download. See FORMAT SELECTION in the youtube-dl manual." \
+		"\n  -f FMT  Choose the format (FMT) to download. See FORMAT SELECTION in the yt-dlp manual." \
 		"\n  -h      Show this help." \
 		"\n  -a EXT  Convert downloaded files to anaudio format (generally 'ogg', or 'mp3')." \
 		"\n  -v      Show verbose output, though logs on file will still be concise (this is useful for debugging, or if you want to save the full output yourself." \
 		"\n  -x MAX  Maximum number of files to keep. 0 means no limit. Default is 50." \
-		"\n\n  Any further options will be passed directly to youtube-dl."
+		"\n\n  Any further options will be passed directly to yt-dlp."
 }
 
 nice() {
@@ -32,12 +32,23 @@ log() {
 	fi
 }
 
+ytdlExe=;
+for candidate in yt-dlp youtube-dl; do
+	if command -v "$candidate" &>/dev/null; then
+		ytdlExe="$candidate";
+	fi
+done
+if [[ -z "$ytdlExe" ]]; then
+	feedback "Please install yt-dlp or youtube-dl.";
+	exit 1;
+fi
+
 ### Gets JSON data for all videos in the playlist, not for the playlist
 ### itself.
 ### The result is not collected into an array: just JSON objects separated by
 ### newlines. This can be read by a tool like ['jq'](https://github.com/stedolan/jq).
 #getPlaylistDataJson() {
-#  youtube-dl -j "$1"
+#  "$ytdlExe" -j "$1"
 #}
 
 getVideoIdsFromPlaylistJson() {
@@ -87,7 +98,7 @@ downloadVideoFiles() {
 
 	cd "$g_destinationDirectory"
 
-	local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
+	local youtubeDlCommand=("$ytdlExe" "${youtubeDlOptions[@]}" "$playlistUrl")
 	echo \$ "${youtubeDlCommand[@]}" >> "$g_tmpLogFile"
 	"${youtubeDlCommand[@]}" >> "$g_tmpLogFile"
 
@@ -119,7 +130,7 @@ writeLocalPlaylist() {
 	cd "$g_destinationDirectory"
 
 	# local youtubeDlOptions=(--get-id)
-	# local youtubeDlCommand=(youtube-dl "${youtubeDlOptions[@]}" "$playlistUrl")
+	# local youtubeDlCommand=("$ytdlExe" "${youtubeDlOptions[@]}" "$playlistUrl")
 	# feedback "${youtubeDlCommand[@]}"
 	local playlistPageData="$(curl -s "$playlistUrl")"
 	local playlistTitle="$(echo -e "$playlistPageData" | grep '<title>' | perl -pe 's/^.*<title>([^<]+?)( - YouTube)?<\/title>.*/\1/')"
@@ -207,3 +218,8 @@ main() {
 ## EXECUTION:
 
 main "$@";
+
+exit;
+
+## HISTORY:
+# 2023-01-28 Switched to yt-dlp from youtube-dl
