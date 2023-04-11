@@ -182,7 +182,7 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
-        "0.1.?  @??????????  Sort digest list" #nosum
+	"0.1.3  @1681229730  Optionally sort digest list.  b2sum=af60835a&size=11528" #nosum
 	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum:5252a8b4#l=32;size:11500" #nosum
 	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum:f6a28dc2#l=32;size:12099" #nosum
 	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names." #nosum
@@ -391,7 +391,7 @@ for dir in "${inputDirectories[@]}"; do
 		must find "${findArgs[@]}" \
 			| sed -E 's/(^|\x00)\.\//\1/g' \
 			| xargs -0 "${sumCommand[@]}" \
-                        | sort -k2;
+			| sort -k2;
 	} > "${outputFilename}";
 	sumStatus=$?;
 	yell "Generated ${dir}/${outputFilename}";
