@@ -92,6 +92,7 @@ initializeSumCommand() {
 
 
 ## CONFIGURATION OPTIONS
+## See functions: getDefaultOptName, getEnvOptName, getValueIfDefined
 
 DEFAULT_ALGORITHM='sha256';
 DEFAULT_DATE_FORMAT='+%Y%m%dT%H%M%SZ';
@@ -138,21 +139,21 @@ getEnvOptName() {
 SCRIPT_USAGE="${0##*/} [OPTIONS] [help] [PATH...]"
 SCRIPT_OPTIONS=(
 	"-h|--help|help     Show this help"
-	"-a CMD             Hashing algorithm to use. Currently supported: 'sha256', 'b2'."
-	"-r                 Recurse into directory"
-	"-L                 Dereference symlinks"
-	"-1|--single        Remove existing *SUM* sumfiles in this directory (trash-cli, falls back to rm). Only this directory, even with -r."
-	"-o|--out TEMPLATE  Output file name template. See 'TEMPLATES' below for substitution patterns."
-	"-l                 Include hostname and PWD in output sumfile. Affected by -L."
-	"-z|--tz TZ         Set timezone for timestamp; default 'UTC'"
-	"-f|--dateformat    Set format for timestamp (per GNU coreutils date)"
-	"-v|--verbose       Increase the detail of the info output to STDERR"
-	"--verbose=N        Set the verbose level"
-	"-x|--exclude PATTERN   Exclude files by name, per find '! -name PATTERN'"
-	"-X|--exclude-path PATTERN  Exclude files by name, per find '! -path PATTERN'; usually of form '*PATTERN*'"
+	"-a CMD             Hashing algorithm to use. Currently supported: 'sha256', 'b2'. env: SUMDIR_ALGORITHM."
+	"-r                 Recurse into directory. env: SUMDIR_SHOULD_RECURSE"
+	"-L                 Dereference symlinks. env: SUMDIR_SHOULD_DEREFERENCE"
+	"-1|--single        Remove existing *SUM* sumfiles in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
+	"-o|--out TEMPLATE  Output file name template. See 'TEMPLATES' below for substitution patterns. env: SUMDIR_OUTPUT_FILE_TEMPLATE"
+	"-l                 Include hostname and PWD in output sumfile. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
+	"-z|--tz TZ         Set timezone for timestamp; default 'UTC'. env: SUMDIR_TIMEZONE"
+	"-f|--dateformat    Set format for timestamp (per GNU coreutils date). env: SUMDIR_DATE_FORMAT"
+	"-v|--verbose[=N]   Increase the detail of the info output to STDERR. env: SUMDIR_VERBOSE"
+	"-x|--exclude PATTERN   Exclude files by name, per find '! -name PATTERN'. env: SUMDIR_LIST_EXCLUDE_NAME"
+	"-X|--exclude-path PATTERN  Exclude files by name, per find '! -path PATTERN'; usually of form '*PATTERN*'. env: SUMDIR_LIST_EXCLUDE_PATH"
 	"--length N         Digest length in bits (b2sum only). Digests appear 1/4 this length in hexadecimal."
 	"                    Default and maximum is 512 (for an output 128 chars long)."
 	"                    This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
+	"                    env: SUMDIR_LIST_%A_OPTS, where %A is the algorithm in upper case (SHA256 or B2)."
 	"--                 After this, all further arguments are passed to 'find'"
 	"--bk               Same as -f '${OPT_OUTPUT_FILE_TEMPLATE_BK}'"
 	"--version          Output version information"
@@ -170,8 +171,8 @@ SCRIPT_DESCRIPTION_LINES=(
 	" "
 	""
 	"ENVIRONMENT VARIABLES"
-	" *_SHOULD_* options expect true or false values."
-	" *_LIST_* options must be specified colon-separated like PATH."
+	" *_SHOULD_* options expect 'true' or 'false' values."
+	" *_LIST_* options must be colon-separated like PATH."
 	""
 	" You may set any of the options above by using the following environment variables."
 	" They are shown here with their default values, if available."
