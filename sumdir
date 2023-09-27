@@ -136,27 +136,57 @@ getEnvOptName() {
 
 ## DOCUMENTATION
 
-SCRIPT_USAGE="${0##*/} [OPTIONS] [help] [PATH...]"
+SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
 SCRIPT_OPTIONS=(
-	"-h|--help|help     Show this help"
-	"-a CMD             Hashing algorithm to use. Currently supported: 'sha256', 'b2'. env: SUMDIR_ALGORITHM."
-	"-r                 Recurse into directory. env: SUMDIR_SHOULD_RECURSE"
-	"-L                 Dereference symlinks. env: SUMDIR_SHOULD_DEREFERENCE"
-	"-1|--single        Remove existing *SUM* sumfiles in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
-	"-o|--out TEMPLATE  Output file name template. See 'TEMPLATES' below for substitution patterns. env: SUMDIR_OUTPUT_FILE_TEMPLATE"
-	"-l                 Include hostname and PWD in output sumfile. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
-	"-z|--tz TZ         Set timezone for timestamp; default 'UTC'. env: SUMDIR_TIMEZONE"
-	"-f|--dateformat    Set format for timestamp (per GNU coreutils date). env: SUMDIR_DATE_FORMAT"
-	"-v|--verbose[=N]   Increase the detail of the info output to STDERR. env: SUMDIR_VERBOSE"
-	"-x|--exclude PATTERN   Exclude files by name, per find '! -name PATTERN'. env: SUMDIR_LIST_EXCLUDE_NAME"
-	"-X|--exclude-path PATTERN  Exclude files by name, per find '! -path PATTERN'; usually of form '*PATTERN*'. env: SUMDIR_LIST_EXCLUDE_PATH"
-	"--length N         Digest length in bits (b2sum only). Digests appear 1/4 this length in hexadecimal."
-	"                    Default and maximum is 512 (for an output 128 chars long)."
-	"                    This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
-	"                    env: SUMDIR_LIST_%A_OPTS, where %A is the algorithm in upper case (SHA256 or B2)."
-	"--                 After this, all further arguments are passed to 'find'"
-	"--bk               Same as -f '${OPT_OUTPUT_FILE_TEMPLATE_BK}'"
-	"--version          Output version information"
+	"-h,--help,help"
+	"    Show this help"
+	""
+	"-a CMD"
+	"    Hashing algorithm to use. Currently supported: 'sha256', 'b2'. env: SUMDIR_ALGORITHM."
+	""
+	"-r                "
+	"    into directory. env: SUMDIR_SHOULD_RECURSE"
+	""
+	"-L                "
+	"    symlinks. env: SUMDIR_SHOULD_DEREFERENCE"
+	""
+	"-1,--single"
+	"    Remove existing *SUM* sumfiles in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
+	""
+	"-o,--out TEMPLATE"
+	"    Output file name template. See 'TEMPLATES' below for substitution patterns. env: SUMDIR_OUTPUT_FILE_TEMPLATE"
+	""
+	"-l                "
+	"    hostname and PWD in output sumfile. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
+	""
+	"-z,--tz TZ"
+	"    Set timezone for timestamp; default 'UTC'. env: SUMDIR_TIMEZONE"
+	""
+	"-f,--dateformat"
+	"    Set format for timestamp (per GNU coreutils date). env: SUMDIR_DATE_FORMAT"
+	""
+	"-v,--verbose[=N]  "
+	"    the detail of the info output to STDERR. env: SUMDIR_VERBOSE"
+	""
+	"-x,--exclude PATTERN"
+	"    Exclude files by name, per find '! -name PATTERN'. env: SUMDIR_LIST_EXCLUDE_NAME"
+	""
+	"-X,--exclude-path PATTERN"
+	"    Exclude files by name, per find '! -path PATTERN'; usually of form '*PATTERN*'. env: SUMDIR_LIST_EXCLUDE_PATH"
+	""
+	"--length N        "
+	"    length in bits (b2sum only). Digests appear 1/4 this length in hexadecimal."
+	"     Default and maximum is 512 (for an output 128 chars long)."
+	"     This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
+	"     env: SUMDIR_LIST_%A_OPTS, where %A is the algorithm in upper case (SHA256 or B2)."
+	"--"
+	"    After this, all further arguments are passed to 'find'"
+	""
+	"--bk"
+	"    Same as -f '${OPT_OUTPUT_FILE_TEMPLATE_BK}'"
+	""
+	"--version"
+	"    Output version information"
 );
 SCRIPT_DESCRIPTION_LINES=(
 	"If no PATH is specified, the current directory (\$PWD) is used."
@@ -183,9 +213,10 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
+	"0.1.4  @1695831187  Improved documentation, esp. environment variables.  b2sum=ad161516&size=11916" #nosum
 	"0.1.3  @1681229730  Sort digest output by file path.  b2sum=af60835a&size=11528" #nosum
-	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum:5252a8b4#l=32;size:11500" #nosum
-	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum:f6a28dc2#l=32;size:12099" #nosum
+	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum=5252a8b4&b2_length=32&size=11500" #nosum
+	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum=f6a28dc2&b2_length=32&size=12099" #nosum
 	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names." #nosum
 	"0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value." #nosum
 	"0.0.8  @1669653009  Add support for multiple optional PATH arguments." #nosum
@@ -290,7 +321,7 @@ setOptsFromEnvAndDefaults;
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
-		-h|--help|help) showHelp; exit;;
+		-h|--help|help) showHelp | less; exit;;
 		-a) opt_algorithm="$2"; shift;;
 		-r) opt_should_recurse=true;;
 		-L) opt_should_dereference=true;;
