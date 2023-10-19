@@ -56,6 +56,7 @@ dereferenceSymlink() {
 }
 sumCommand=();
 checkCommand=();
+jobExecutor=();
 g_algoUpper='';
 initializeSumCommand() {
 	case "$(echo -n "$opt_algorithm" | toLowerCase)" in
@@ -89,6 +90,14 @@ initializeSumCommand() {
 	fi
 	g_algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
 }
+initializeJobExecutor() {
+    if command -v parallel &>/dev/null; then
+        jobExecutor=(parallel -0); return 0; fi;
+    if command -v xargs &>/dev/null; then
+        jobExecutor=(xargs -0); return 0; fi;
+    die "Missing parallel and xargs.";
+}
+
 
 
 ## CONFIGURATION OPTIONS
@@ -213,6 +222,7 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
+	"0.1.5rc @?          Fallback to xargs for executing digest commands if parallel not found.  b2sum=?&size=?" #nosum
 	"0.1.4  @1695831187  Improved documentation, esp. environment variables.  b2sum=ad161516&size=11916" #nosum
 	"0.1.3  @1681229730  Sort digest output by file path.  b2sum=af60835a&size=11528" #nosum
 	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum=5252a8b4&b2_length=32&size=11500" #nosum
@@ -345,6 +355,7 @@ done
 whisper 1 "(Verbose output level: ${opt_verbose})"
 
 initializeSumCommand;
+initializeJobExecutor;
 
 [[ ${#inputDirectories[@]} -eq 0 ]] && inputDirectories=("$PWD");
 
@@ -422,7 +433,7 @@ for dir in "${inputDirectories[@]}"; do
 			#| perl -pe 's/(^|\x00)\.\//\1/g' \
 		must find "${findArgs[@]}" \
 			| sed -E 's/(^|\x00)\.\//\1/g' \
-			| parallel -0 "${sumCommand[@]}" \
+			| "${jobExecutor[@]}" "${sumCommand[@]}" \
 			| sort -k2;
 	} > "${outputFilename}";
 	sumStatus=$?;
