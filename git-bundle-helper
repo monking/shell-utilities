@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# {:01kxCcs} TODO: show help, or at least confirmation prompt with description of effect, when run without arguments.<br/><br/>2021-01-06T17:29:38Z
-# {:01kxD6e} TODO: Change bcrypt to gpg encryption, or similar.
-
 showHelp() {
   echo "USAGE: gb [-h] [GIT COMMAND] [<bundle_path>|<bundle_dir>] [<other_git_arguments>]]"
   echo "	-e encrypt using bcrypt (WARNING: bcrypt is outdated; better to not use this, and encrypt in a separate step)"
@@ -155,3 +152,7 @@ if [[ $encrypt = true ]]; then
 fi
 
 echo "did: 'git $git_command' with '$remote'"
+
+## tasks:
+# - Show help, or at least confirmation prompt with description of effect, when run without arguments. (2021-01-06, id:01kxCcs)
+# - Change bcrypt to gpg encryption, or similar. (2021-01-06, id: 01kxD6e)
