@@ -91,11 +91,11 @@ initializeSumCommand() {
 	g_algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
 }
 initializeJobExecutor() {
-    if command -v parallel &>/dev/null; then
-        jobExecutor=(parallel -0); return 0; fi;
-    if command -v xargs &>/dev/null; then
-        jobExecutor=(xargs -0); return 0; fi;
-    die "Missing parallel and xargs.";
+	if command -v parallel &>/dev/null; then
+		jobExecutor=(parallel -0); return 0; fi;
+	if command -v xargs &>/dev/null; then
+		jobExecutor=(xargs -0); return 0; fi;
+	die "Missing parallel and xargs.";
 }
 
 
@@ -146,6 +146,10 @@ getEnvOptName() {
 ## DOCUMENTATION
 
 SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
+SCRIPT_EXAMPLE_COLUMNS=(script description);
+SCRIPT_EXAMPLES=()
+SCRIPT_EXAMPLES+=("sumdir -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
+SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
 SCRIPT_OPTIONS=(
 	"-h,--help,help"
 	"    Show this help"
@@ -160,13 +164,13 @@ SCRIPT_OPTIONS=(
 	"    symlinks. env: SUMDIR_SHOULD_DEREFERENCE"
 	""
 	"-1,--single"
-	"    Remove existing *SUM* sumfiles in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
+	"    Remove existing *SUM* SUMFILEs in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
 	""
 	"-o,--out TEMPLATE"
 	"    Output file name template. See 'TEMPLATES' below for substitution patterns. env: SUMDIR_OUTPUT_FILE_TEMPLATE"
 	""
 	"-l                "
-	"    hostname and PWD in output sumfile. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
+	"    hostname and PWD in output SUMFILE. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
 	""
 	"-z,--tz TZ"
 	"    Set timezone for timestamp; default 'UTC'. env: SUMDIR_TIMEZONE"
@@ -222,7 +226,8 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
-	"0.1.5rc @?          Fallback to xargs for executing digest commands if parallel not found.  b2sum=?&size=?" #nosum
+	"0.1.6  @1699561902  Template can contain output path. More documentation.  b2sum=6ef9ea3c&size=13289" #nosum
+	"0.1.5  @1697677091  Fallback to xargs for executing digest commands if parallel not found.  b2sum=fb9ebc12&size=12228&commit=9b8aeca" #nosum
 	"0.1.4  @1695831187  Improved documentation, esp. environment variables.  b2sum=ad161516&size=11916" #nosum
 	"0.1.3  @1681229730  Sort digest output by file path.  b2sum=af60835a&size=11528" #nosum
 	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum=5252a8b4&b2_length=32&size=11500" #nosum
@@ -243,6 +248,7 @@ SCRIPT_VERSION_NICE="v${SCRIPT_VERSION%%  *}";
 
 showHelp() {
 	echo "USAGE: $SCRIPT_USAGE";
+	echo "PURPOSE: $SCRIPT_PURPOSE";
 	echo "";
 	echo "OPTIONS:";
 	local opt;
@@ -253,6 +259,22 @@ showHelp() {
 	echo "DESCRIPTION:";
 	for line in "${SCRIPT_DESCRIPTION_LINES[@]}"; do
 		echo "  ${line}"
+	done
+	echo "";
+	echo "EXAMPLES:";
+	local exampleIndex=0;
+	local exampleColumnCount=${#SCRIPT_EXAMPLE_COLUMNS[@]};
+	local exampleColumnIndex=;
+	local exampleColumnName=;
+	for example in "${SCRIPT_EXAMPLES[@]}"; do
+		let 'exampleColumnIndex = exampleIndex % exampleColumnCount';
+		exampleColumnName="${SCRIPT_EXAMPLE_COLUMNS[$exampleColumnIndex]}";
+		if [[ 'script' == $exampleColumnName ]]; then
+			echo "  \$ ${example}";
+		elif [[ 'description' == $exampleColumnName ]]; then
+			echo "    # ${example}";
+		fi
+		let 'exampleIndex++';
 	done
 }
 
@@ -363,6 +385,7 @@ initializeJobExecutor;
 
 ## LOOP THROUGH INPUT DIRECTORIES
 dStackHeight=0
+cwd="$PWD";
 for dir in "${inputDirectories[@]}"; do
 	while [[ $dStackHeight -gt 0 ]]; do
 		popd &>/dev/null \
@@ -386,6 +409,15 @@ for dir in "${inputDirectories[@]}"; do
 	outputFilename="${outputFilename/\%d/$date}";
 	outputFilename="${outputFilename/\%a/$opt_algorithm}";
 	outputFilename="${outputFilename/\%A/${g_algoUpper}}";
+	if [[ $outputFilename =~ / ]]; then
+		if [[ ${outputFilePath:0:1} == '/' ]]; then
+			outputFilePath="$outputFilename";
+		else
+			outputFilePath="${cwd}/${outputFilename}";
+		fi
+	else
+		outputFilePath="${dir}/${outputFilename}";
+	fi
 
 	findArgs=();
 	if [[ $opt_should_dereference == true ]]; then
@@ -416,7 +448,7 @@ for dir in "${inputDirectories[@]}"; do
 	{
 		echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${CALLED_AS_WITH_ARGS}\`)";
 		echo "# Same as:  ${sumCommand[*]} FILENAMES";
-		echo "# To check file integrity, run:  ${checkCommand[*]} -c ${outputFilename}";
+		echo "# To check file integrity, run:  ${checkCommand[*]} -c ${outputFilePath}";
 		if [[ $opt_should_include_location_in_output == true ]]; then
 			dirPath="${PWD}"
 			if [[ $opt_should_dereference == true ]]; then
@@ -435,9 +467,9 @@ for dir in "${inputDirectories[@]}"; do
 			| sed -E 's/(^|\x00)\.\//\1/g' \
 			| "${jobExecutor[@]}" "${sumCommand[@]}" \
 			| sort -k2;
-	} > "${outputFilename}";
+	} > "${outputFilePath}";
 	sumStatus=$?;
-	yell "Generated ${dir}/${outputFilename}";
+	yell "Generated ${outputFilePath}";
 
 	if [[ $sumStatus != 0 ]]; then
 		exit $sumStatus;
