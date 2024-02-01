@@ -46,7 +46,7 @@ dereferenceSymlink() {
 	local linkPath="$1";
 	local realPath;
 	while [ -L "$linkPath" ]; do
-		realPath="$(readlink "${linkPath}")";
+		realPath="$(readlink -- "${linkPath}")";
 		if [ ${realPath:0:1} != '/' ]; then
 			realPath="$(dirname "${linkPath}")/${realPath}";
 		fi
@@ -83,6 +83,7 @@ initializeSumCommand() {
 			;;
 		*) die "Unknown sum algorithm '${opt_algorithm}'. Aborting for safety.";;
 	esac
+	sumCommand+=(--); # no more options, in case filenames/paths begin with `-`.
 	if command -v "${sumCommand[0]}" &>/dev/null; then
 		whisper 1 "Using $(which "${sumCommand[0]}")";
 	else
@@ -226,6 +227,7 @@ for opt in "${OPT_VAR_NAMES[@]}"; do
 	SCRIPT_DESCRIPTION_LINES+=("$line");
 done
 SCRIPT_VERSIONS=(
+	"0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
 	"0.1.6  @1699561902  Template can contain output path. More documentation.  b2sum=6ef9ea3c&size=13289" #nosum
 	"0.1.5  @1697677091  Fallback to xargs for executing digest commands if parallel not found.  b2sum=fb9ebc12&size=12228&commit=9b8aeca" #nosum
 	"0.1.4  @1695831187  Improved documentation, esp. environment variables.  b2sum=ad161516&size=11916" #nosum
@@ -242,7 +244,6 @@ SCRIPT_VERSIONS=(
 	"0.0.2  @1664175862  Added --exclude PATTERN option." #nosum
 	"0.0.1  @1664175274" #nosum
 );
-## <data:application/vim+macro,mx%2FSCRIPT_VERSIONS%3D%0Dj%24F%22hvT%20c%12%3DTrim%28system%28%27sum-stream%27%2C%20join%28getline%281%2C%27%24%27%29%2C%22%5Cn%22%29%29%29%0D%1B%60x> ref:1670969781
 SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}";
 SCRIPT_VERSION_NICE="v${SCRIPT_VERSION%%  *}";
 
