@@ -8,7 +8,7 @@ feedback() {
 }
 
 showHelp() {
-	feedback -e \
+	echo -e \
 		"\n  -l URL  Playlist URL (required). You can use this option multiple times to add multiple lists to one collection." \
 		"\n  -d DIR  Path to the directory in which to download the files. (required)" \
 		"\n  -f FMT  Choose the format (FMT) to download. See FORMAT SELECTION in the youtube-dl manual." \
@@ -176,7 +176,7 @@ main() {
 			d) g_destinationDirectory="$OPTARG";;
 			D) shouldDownloadVideos=false;;
 			f) g_format="$OPTARG";;
-			h) showHelp;;
+			h) showHelp | less;;
 			l) playlistUrls+=("$OPTARG");;
 			v) verbose=true;;
 			x) maxFiles="$OPTARG";;
