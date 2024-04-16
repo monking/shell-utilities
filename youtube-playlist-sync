@@ -1,9 +1,5 @@
 #!/bin/bash
 # status: UNSTABLE
-# TODO (A) 2024-02-29 +next make sure that maxFiles is working as intended.
-# TODO (B) 2024-02-29 +then get video IDs in order
-# TODO (C) 2024-02-29 +then make playlist of best quality files only (no dupes)
-# TODO (D) 2024-02-29 +then make other playlists
 
 DEFAULT_DEST_DIR="$PWD";
 DEFAULT_LIMIT=0;
@@ -151,15 +147,20 @@ downloadVideoFiles() {
 	# skipped when checking the playlist again. Also avoid overwriting files if
 	# re-downloading a file (by removing or commenting it out from the archive
 	# log).
-	downloaderOptions+=(--download-archive "$g_downloadArchivePath" --no-overwrites)
+	downloaderOptions+=(--download-archive "$g_downloadArchivePath" --no-overwrites);
 
-	downloaderOptions+=(--no-call-home)
+	#downloaderOptions+=(--no-mtime);
+
+	if [[ $g_downloaderExecutablePath =~ youtube-dl ]]; then
+		# --[no-]call-home is removed from yt-dlp
+		downloaderOptions+=(--no-call-home);
+	fi
 	knock 0 \
 		|| downloaderOptions+=(--no-warnings --ignore-errors);
 	knock 1 \
 		|| downloaderOptions+=(--no-progress);
 
-	downloaderOptions+=(--write-sub --write-auto-sub --embed-subs --sub-format srt) # take what we can get
+	downloaderOptions+=(--write-sub --write-auto-sub --embed-subs --sub-format ass/srt/best) # take what we can get
 
 	# --output template: https://github.com/yt-dlp/yt-dlp/raw/master/README.md#output-template
 	downloaderOptions+=(--output '%(upload_date)s.%(uploader)s.%(title)s.%(id)s.%(format)s.%(ext)s' --restrict-filenames)
@@ -210,7 +211,7 @@ downloadPlaylistInfoJson() {
 		shift;
 	done;
 	local dlCommand=("$g_downloaderExecutablePath");
-	dlCommand+=(--write-playlist-metafiles);
+	#dlCommand+=(--write-playlist-metafiles); #  no need, this is the default
 	dlCommand+=(--write-info-json);
 	dlCommand+=(--skip-download);
 	dlCommand+=("$playlistUrl");
