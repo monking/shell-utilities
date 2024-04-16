@@ -283,10 +283,11 @@ removeFilesByTemplate() {
 	local template="$1";
 
 	whisper 2 "Output filename template: ${template}";
-	local templateStar="${template//\{\}/*}";
-	templateStar="${templateStar//%d/*}";
-	templateStar="${templateStar//%a/$opt_algorithm}";
-	templateStar="${templateStar//%A/${g_algoUpper}}";
+	local templateStar="$(getGlobByTemplate "$template")";
+	#local templateStar="${template//\{\}/*}";
+	#templateStar="${templateStar//%d/*}";
+	#templateStar="${templateStar//%a/$opt_algorithm}";
+	#templateStar="${templateStar//%A/${g_algoUpper}}";
 	whisper 2 "Pattern for files to remove: ${templateStar}";
 	local oIFS="$IFS";
 	local IFS='*';
@@ -371,7 +372,7 @@ while [[ $# -gt 0 ]]; do
 		--) shift; break;;
 		--bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
 		--version) echo "${SCRIPT_VERSION_NICE} ($0)"; whisper 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
-		*) inputDirectories+=("$1");;
+		*) inputDirectories+=("$1"); whisper 1 "Input directory #${#inputDirectories[@]}: $1";;
 	esac
 	shift;
 done
@@ -381,6 +382,41 @@ initializeSumCommand;
 initializeJobExecutor;
 
 [[ ${#inputDirectories[@]} -eq 0 ]] && inputDirectories=("$PWD");
+
+getPathByTemplate() {
+	local template="$1";
+	local cwd="$2";
+	if [[ -z $cwd ]]; then
+		cwd="$PWD";
+	fi;
+	local dir="$3";
+	if [[ -z $dir ]]; then
+		dir="$PWD";
+	fi;
+	local date="$4";
+	if [[ -z $date ]]; then
+		date="$(TZ="$opt_timezone" date "$opt_date_format")";
+	fi;
+	local outputFilename="${template/\{\}/$date}";
+	outputFilename="${outputFilename/\%d/$date}";
+	outputFilename="${outputFilename/\%a/$opt_algorithm}";
+	outputFilename="${outputFilename/\%A/${g_algoUpper}}";
+	if [[ $outputFilename =~ / ]]; then
+		if [[ ${outputFilePath:0:1} == '/' ]]; then
+			outputFilePath="$outputFilename";
+		else
+			outputFilePath="${cwd}/${outputFilename}";
+		fi
+	else
+		outputFilePath="${dir}/${outputFilename}";
+	fi
+	echo -n "$outputFilePath";
+}
+
+getGlobByTemplate() {
+	local dateArg='*';
+	return getPathByTemplate "$1" "$2" "$3" "$dateArg";
+}
 
 
 
@@ -406,19 +442,7 @@ for dir in "${inputDirectories[@]}"; do
 
 	date="$(TZ="$opt_timezone" date "$opt_date_format")";
 
-	outputFilename="${opt_output_file_template/\{\}/$date}";
-	outputFilename="${outputFilename/\%d/$date}";
-	outputFilename="${outputFilename/\%a/$opt_algorithm}";
-	outputFilename="${outputFilename/\%A/${g_algoUpper}}";
-	if [[ $outputFilename =~ / ]]; then
-		if [[ ${outputFilePath:0:1} == '/' ]]; then
-			outputFilePath="$outputFilename";
-		else
-			outputFilePath="${cwd}/${outputFilename}";
-		fi
-	else
-		outputFilePath="${dir}/${outputFilename}";
-	fi
+	outputFilePath="$(getPathByTemplate "$opt_output_file_template" "$dir" "$cwd" "$date")";
 
 	findArgs=();
 	if [[ $opt_should_dereference == true ]]; then
