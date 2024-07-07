@@ -46,6 +46,7 @@ SCRIPT_DESCRIPTION_LINES=(
 	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed in the current directory, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
+	"0.1.0 @1720381791  Show progress (percent an count).   b2sum=f08aeb69&size=5480" #nosum
 	"0.0.7 @1670970409  Support for Bash 3.2.x; require tr instead of perl.   sum:db71df2c#a=b2,l=32;size:4959" #nosum
 	"0.0.6 @1670954755  Added option -l to output selected SUM file path.   sum:8e5df517#a=b2,l=32;size:4800" #nosum
 	"0.0.5 @1670874600  Allow checking only existence of files from SUMFILE (opt '-e').   sum:a4a54a563924caca275b3626734ee015#a=b2,l=128;size:5205" #nosum
@@ -96,7 +97,7 @@ confirm() {
 }
 
 initializeSumCommand() {
-	# NOTE: Each command MUST support the '-c SUMFILE' option.
+	# NOTE: Each command MUST support the '--check SUMFILE' option.
 	opt_algorithm="$(echo "$opt_algorithm" | toLowerCase)";
 	case $opt_algorithm in
 		sha*) sumCommand=(sha256sum);
@@ -127,18 +128,23 @@ getSumFile() {
 	echo -en "$match" | head -1
 }
 
+countFilesInSumFile() {
+	local sumFile="$1"
+	grep -Ecv '^\s*(#.*)\s*$' "$sumFile";
+}
 describeSumFile() {
-	local sumfile="$1"
-	local fileCount="$(grep -Ecv '^\s*(#.*)\s*$' "$sumfile")"
-	local dirCount="$(grep -Ec '^[a-f0-9]+  .*/' "$sumfile")"
+	local sumFile="$1";
+	local fileCount="$2";
+	[[ -z $fileCount ]] && fileCount="$(countFilesInSumFile "$sumFile")";
+	local dirCount="$(grep -Ec '^[a-f0-9]+  .*/' "$sumFile")";
 
-	local description="${fileCount} files"
+	local description="${fileCount} files";
 
 	if [[ $dirCount -gt 0 ]]; then
-		description+="; descends into directories"
-	fi
+		description+="; descends into directories";
+	fi;
 
-	echo -n "$description"
+	echo -n "$description";
 }
 
 ## Giving it a descriptive name, because (with option -e) it shows up in the "full" output to an
@@ -187,19 +193,31 @@ main() {
 	fi
 
 	checkOutputCacheFile="${TMPDIR}/.checking.${sumFile}.${RANDOM}.log";
-	yell "Checking files against $sumFile ($(describeSumFile "$sumFile"))";
+	local fileCount="$(countFilesInSumFile "$sumFile")";
+	yell "Checking files against $sumFile ($(describeSumFile "$sumFile" "$fileCount"))";
 
 	## PREPARING EXECUTION:
 	checkCommand=();
 	if [[ $opt_check_exists_only != 'true' ]]; then
 		initializeSumCommand;
-		checkCommand+=("${sumCommand[@]}" -c "$sumFile");
+		checkCommand+=("${sumCommand[@]}" --check "$sumFile");
 	else
 		checkCommand+=(checkdir_doPathsInSumFileExist "$sumFile");
 	fi
 
 	## EXECUTION:
-	checkOutput="$("${checkCommand[@]}")";
+	# WISH (B) 2024-07-07 parallelize file hash check
+	# DONE x 2024-07-07 (A) 2024-07-07 Show progress
+	local checkOutput="$("${checkCommand[@]}" | {
+		outputLineCount=0;
+		while read outputLine; do
+			let 'outputLineCount++';
+			echo "$outputLine";
+			>&2 echo -n "  $((100 * outputLineCount / fileCount))% (${outputLineCount} files checked)       "$'\r'; # space at the end to blank out long numbers
+		done;
+		>&2 echo;
+	};)";
+	
 	checkStatus=$?;
 
 	## HANDLE OUTPUT:

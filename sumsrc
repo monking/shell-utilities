@@ -1,0 +1,102 @@
+#!/bin/bash
+_is_yielded=false;
+yell() { echo "$@" >&2; }
+die() { yell "$@"; exit 111; }
+flag() { _is_yielded=true; yell "ERROR: $@"; }
+yield() { if [ "$_is_yielded" == "true" ]; then die "Aborting because of above errors."; fi; }
+
+SCRIPT_NAME="${0##*/}";
+DEFAULT_DIGEST_LENGTH=32;
+DEFAULT_OUTPUT_FORMAT='query';
+showHelp() {
+	echo "USAGE (STDIN or PATH modes):";
+	echo "[…] | ${SCRIPT_NAME} [OPTIONS]";
+	echo "${SCRIPT_NAME} [OPTIONS] PATH";
+	echo "";
+	echo "OPTIONS:";
+	echo " -h    Show this help";
+	#echo " -f FORMAT";
+	#echo "       Specify source FORMAT, so that comments can be escaped correctly (only sh and vim are used right now)";
+	echo " -j    Output JSON";
+	echo " -t    Output plain text";
+	echo " -q    Output query string (default)";
+	echo " -l N  Set digest length in bits, default ${DEFAULT_DIGEST_LENGTH} (see b2sum -l)";
+	echo "";
+	echo "EXAMPLE:";
+	echo "  cat myfile.txt | ${SCRIPT_NAME}";
+}
+
+targetFile=
+opt_sumLength=$DEFAULT_DIGEST_LENGTH;
+opt_outputFormat=$DEFAULT_OUTPUT_FORMAT;
+while [ $# -gt 0 ]; do
+	case $1 in
+		-h) showHelp; exit;;
+		#-f) opt_inputFormat="$2"; shift;;
+		-j) opt_outputFormat='json';;
+		-t) opt_outputFormat='plain';;
+		-q) opt_outputFormat='query';;
+		-l) opt_sumLength=$2; shift;;
+		*) if [[ -z $targetFile ]]; then targetFile="$1"; else flag "Unknown arg '$1'"; fi;;
+	esac
+	shift;
+done
+
+if [[ -t 0 && ( -z "$targetFile" || ! -s "$targetFile" ) ]]; then
+	echo "Please provide input data, by STDIN (e.g. 'cat ~/myfile.txt | ${SCRIPT_NAME}') or as first non-option argument (e.g. '${SCRIPT_NAME} myfile.txt')" >&2;
+	echo '' >&2;
+	showHelp >&2;
+	exit 1;
+fi
+
+[[ $opt_sumLength =~ ^[0-9]+$ ]] || flag "Please specify only integer numbers for the length value of option '-l'.";
+
+yield;
+
+getOmitLinesPattern() {
+	local commentChar='#';
+	#local blockCommentPattern=''; # WISH, LATER: omit block comments. Maybe use some other program to do the comment identification (Vim)?
+	local filename=$1;
+	#echo "DEBUG(filename): ${filename}"; #XXX
+	if [[ -n $filename ]]; then
+		local ftype="${filename##*.}";
+		ftype="${ftype##*/}";
+		case $ftype in
+			vim|vimrc) commentChar='"';;
+			# LATER: add more.
+		esac
+	fi
+	local OMIT_KEYWORD='nosum';
+	# NOTE: grep is using -E extended RegExp option, so pipes are not escaped.
+	local pattern='^\s*$'; # empty line
+	pattern+='|^\s*'"${commentChar}"'[^!]'; # commented line, besides execution hint  FIXME (B) 2024-06-05 only applies when commentChar='#'
+	pattern+='|'"${commentChar}${OMIT_KEYWORD}"'$'; # lines ENDING like '#nosum'
+	echo "$pattern";
+}
+
+ALGORITHM_NAME_SHORT='b2';
+if [[ -n $targetFile ]]; then
+	omitPattern="$(getOmitLinesPattern "$targetFile")";
+	data="$(grep -E -v "$omitPattern" "$targetFile")";
+else
+	omitPattern="$(getOmitLinesPattern)";
+	data="$(grep -E -v "$omitPattern")";
+fi
+#echo -n "[DEBUG(omitPattern):\n${omitPattern}]"; #XXX
+#echo -n "[DEBUG(DATA):\n${data}]" | head -20;exit 130; #XXX
+sum="$(b2sum -l ${opt_sumLength} <(echo "$data") | awk '{ print $1 }')";
+size="$(echo "$data" | wc -c| awk '{ print $1 }')";
+case $opt_outputFormat in
+	json) echo "{\"sum\":\"${sum}\",\"a\":\"${ALGORITHM_NAME_SHORT}\",\"l\":${opt_sumLength},\"size\":${size}}";;
+	plain) echo "sum:${sum}#a=${ALGORITHM_NAME_SHORT},l=${opt_sumLength};size:${size};";;
+	query) echo "${ALGORITHM_NAME_SHORT}sum=${sum}&size=${size}";;
+	*) die "Unknown output form at '${opt_outputFormat}'";;
+esac
+
+## HISTORY:
+# v0.1.0  2022-12-13  Optional JSON output. Adding -h documentation.  b2sum=0c305a3b&size=1592
+# v0.2.0  2022-12-16  2nd mode, PATH arg instead of STDIN; Renamed 'sumsrc' from 'sum-stream'.  b2sum=bf10f132&size=2041
+# v0.3.0  2022-12-19  Add query output format. Include '#!...' execution comment in sum. Change 'sum' key to '*sum' where '*' is algorithm short name. b2sum=b64e99f0&size=2364
+# v0.4.0  2022-12-20  Adapt comment pattern to input source language (stub: only Vim by file name).  b2sum=beaa596f&size=2691
+# v0.5.0  2024-07-07  Fix omit pattern for grep -E. Adding to shell-utilities.   b2sum=d23acaeb&size=2787
+# STUB  2024-06-05  Support more formats, and allow specifying with input option arg.
