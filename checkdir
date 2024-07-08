@@ -192,7 +192,7 @@ main() {
 		opt_algorithm=sha256;
 	fi
 
-	checkOutputCacheFile="${TMPDIR}/.checking.${sumFile}.${RANDOM}.log";
+	checkOutputCacheFile="${TMPDIR}/.checking.${sumFile##*/}.${RANDOM}.log";
 	local fileCount="$(countFilesInSumFile "$sumFile")";
 	yell "Checking files against $sumFile ($(describeSumFile "$sumFile" "$fileCount"))";
 
