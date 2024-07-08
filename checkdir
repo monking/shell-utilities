@@ -46,7 +46,7 @@ SCRIPT_DESCRIPTION_LINES=(
 	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed in the current directory, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
-	"0.1.0 @1720381791  Show progress (percent an count).   b2sum=f08aeb69&size=5480" #nosum
+	"0.1.0 @1720381791  Show progress (percent an count).   b2sum=14b0e4c8&size=5484" #nosum
 	"0.0.7 @1670970409  Support for Bash 3.2.x; require tr instead of perl.   sum:db71df2c#a=b2,l=32;size:4959" #nosum
 	"0.0.6 @1670954755  Added option -l to output selected SUM file path.   sum:8e5df517#a=b2,l=32;size:4800" #nosum
 	"0.0.5 @1670874600  Allow checking only existence of files from SUMFILE (opt '-e').   sum:a4a54a563924caca275b3626734ee015#a=b2,l=128;size:5205" #nosum
