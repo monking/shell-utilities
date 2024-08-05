@@ -100,3 +100,4 @@ lynx "${lynxArgs[@]}"
 
 # {:01iDt7w} ```html\n<script data-react-helmet="true" type="application/ld+json">\n	"@context": "http://schema.org",\n	"@type": "WebSite",\n	"url": "https://www.etymonline.com/",\n	"potentialAction": {\n			"@type": "SearchAction",\n			"target": "https://www.etymonline.com/search?q={search_term_string}&source=ds_search",\n			"query-input": "required name=search_term_string"\n	}\n</script>\n```
 # {:01iDtAu} https://en.wikipedia.org\n```html\n<link rel="search" type="application/opensearchdescription+xml" href="/w/opensearch_desc.php" title="Wikipedia (en)"/>\n```\n\nhttps://en.wikipedia.org/w/opensearch_desc.php\n```\nhttps://en.wikipedia.org/w/index.php?title=Special:Search&amp;search={searchTerms}\n```
+# IDEA (B) 2024-07-10 Shortcut for searching by Bang codes via DuckDuckGo
