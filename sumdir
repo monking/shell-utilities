@@ -93,7 +93,7 @@ initializeSumCommand() {
 }
 initializeJobExecutor() {
 	if command -v parallel &>/dev/null; then
-		jobExecutor=(parallel -0); return 0; fi;
+		jobExecutor=(parallel -0 --bar); return 0; fi;
 	if command -v xargs &>/dev/null; then
 		jobExecutor=(xargs -0); return 0; fi;
 	die "Missing parallel and xargs.";
