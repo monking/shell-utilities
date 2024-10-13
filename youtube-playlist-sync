@@ -11,12 +11,12 @@ showHelp() {
 	echo -e \
 		"\n  -l URL  Playlist URL (required). You can use this option multiple times to add multiple lists to one collection." \
 		"\n  -d DIR  Path to the directory in which to download the files. (required)" \
-		"\n  -f FMT  Choose the format (FMT) to download. See FORMAT SELECTION in the youtube-dl manual." \
+		"\n  -f FMT  Choose the format (FMT) to download. See FORMAT SELECTION in the yt-dlp (or youtube-dl) manual." \
 		"\n  -h      Show this help." \
 		"\n  -a EXT  Convert downloaded files to anaudio format (generally 'ogg', or 'mp3')." \
 		"\n  -v      Show verbose output, though logs on file will still be concise (this is useful for debugging, or if you want to save the full output yourself." \
 		"\n  -x MAX  Maximum number of files to keep. 0 means no limit. Default is 50." \
-		"\n\n  Any further options will be passed directly to youtube-dl."
+		"\n\n  Any further options will be passed directly to yt-dlp (or youtube-dl)."
 }
 
 nice() {
