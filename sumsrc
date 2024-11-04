@@ -54,7 +54,7 @@ fi
 yield;
 
 getOmitLinesPattern() {
-	local commentChar='#';
+	local commentLineStart='#';
 	#local blockCommentPattern=''; # WISH, LATER: omit block comments. Maybe use some other program to do the comment identification (Vim)?
 	local filename=$1;
 	#echo "DEBUG(filename): ${filename}"; #XXX
@@ -62,15 +62,17 @@ getOmitLinesPattern() {
 		local ftype="${filename##*.}";
 		ftype="${ftype##*/}";
 		case $ftype in
-			vim|vimrc) commentChar='"';;
+			vim|vimrc) commentLineStart='"';;
+			js|javascript|ts|typescript|c|cpp) commentLineStart='//';;
+			sh) commentLineStart='##';;
 			# LATER: add more.
 		esac
 	fi
 	local OMIT_KEYWORD='nosum';
 	# NOTE: grep is using -E extended RegExp option, so pipes are not escaped.
 	local pattern='^\s*$'; # empty line
-	pattern+='|^\s*'"${commentChar}"'[^!]'; # commented line, besides execution hint  FIXME (B) 2024-06-05 only applies when commentChar='#'
-	pattern+='|'"${commentChar}${OMIT_KEYWORD}"'$'; # lines ENDING like '#nosum'
+	pattern+='|^\s*'"${commentLineStart}"'[^!]'; # commented line, besides execution hint  FIXME (B) 2024-06-05 only applies when commentLineStart='#'
+	pattern+='|'"${commentLineStart}${OMIT_KEYWORD}"'$'; # lines ENDING like '#nosum'
 	echo "$pattern";
 }
 
@@ -82,8 +84,8 @@ else
 	omitPattern="$(getOmitLinesPattern)";
 	data="$(grep -E -v "$omitPattern")";
 fi
-#echo -n "[DEBUG(omitPattern):\n${omitPattern}]"; #XXX
-#echo -n "[DEBUG(DATA):\n${data}]" | head -20;exit 130; #XXX
+#>&2 echo -n "[DEBUG(omitPattern):\n${omitPattern}]";
+#>&2 echo -n "[DEBUG(DATA):\n${data}]" | head -20;exit 130;
 sum="$(b2sum -l ${opt_sumLength} <(echo "$data") | awk '{ print $1 }')";
 size="$(echo "$data" | wc -c| awk '{ print $1 }')";
 case $opt_outputFormat in
