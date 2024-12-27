@@ -1,6 +1,6 @@
 #!/bin/bash
 
-E_NOPLAYERAPP=1
+E_NOPLAYERAPP=3
 E_NOMEDIA=2
 
 shout() {
@@ -29,13 +29,14 @@ showHelp() {
 g_yt_options=()
 g_player_options=()
 
-# g_player_app=mplayer
-g_player_app=mpv
-# command -v $g_player_app &>/dev/null || g_player_app=mpv
-command -v $g_player_app &>/dev/null || {
-  shout "Expecting either mplayer or mpv to be installed."
-  exit $E_NOPLAYERAPP
-}
+if command -v mpv &>/dev/null; then
+	g_player_app=mpv;
+elif command -v mplayer &>/dev/null; then
+	g_player_app=mplayer;
+else
+	>&2 echo "Please install mpv (or mplayer).";
+	exit $E_NOPLAYERAPP;
+fi
 
 while getopts 'adDhjv' flag; do
 	case $flag in

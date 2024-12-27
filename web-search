@@ -1,7 +1,8 @@
 #!/bin/bash
 
-E_NOENGINE=1
-E_INPUT=2
+E_NOENGINE=1;
+E_INPUT=2;
+E_MISSING_DEPENDENCIES=3;
 
 SCRIPT_NAME="web-search"
 AVAILABLE_SEARCH_ENGINES=(
@@ -51,7 +52,10 @@ for engine in "${AVAILABLE_SEARCH_ENGINES[@]}"; do
   fi
 done
 
-if [[ ${#matchingEngines[@]} -eq 1 ]]; then
+if ! command -v lynx &>/dev/random; then
+	>&2 echo "Please install lynx (sudo apt-get install lynx).";
+	exit $E_MISSING_DEPENDENCIES;
+elif [[ ${#matchingEngines[@]} -eq 1 ]]; then
   engine="${matchingEngines[0]}"
 elif [[ ${#matchingEngines[@]} -gt 1 ]]; then
   echo "Multiple matching search engines for input '$selectedEngine': ${matchingEngines[*]}" >&2
@@ -98,6 +102,6 @@ lynxArgs=()
 lynxArgs+=("$url")
 lynx "${lynxArgs[@]}"
 
-# {:01iDt7w} ```html\n<script data-react-helmet="true" type="application/ld+json">\n	"@context": "http://schema.org",\n	"@type": "WebSite",\n	"url": "https://www.etymonline.com/",\n	"potentialAction": {\n			"@type": "SearchAction",\n			"target": "https://www.etymonline.com/search?q={search_term_string}&source=ds_search",\n			"query-input": "required name=search_term_string"\n	}\n</script>\n```
-# {:01iDtAu} https://en.wikipedia.org\n```html\n<link rel="search" type="application/opensearchdescription+xml" href="/w/opensearch_desc.php" title="Wikipedia (en)"/>\n```\n\nhttps://en.wikipedia.org/w/opensearch_desc.php\n```\nhttps://en.wikipedia.org/w/index.php?title=Special:Search&amp;search={searchTerms}\n```
+# {"id":"01iDt7w","date":"2019-09-27T16:29:52Z","text":"```html\n<script data-react-helmet=\"true\" type=\"application/ld+json\">\n\t\"@context\": \"http://schema.org\",\n\t\"@type\": \"WebSite\",\n\t\"url\": \"https://www.etymonline.com/\",\n\t\"potentialAction\": {\n\t\t\t\"@type\": \"SearchAction\",\n\t\t\t\"target\": \"https://www.etymonline.com/search?q={search_term_string}&source=ds_search\",\n\t\t\t\"query-input\": \"required name=search_term_string\"\n\t}\n</script>\n```"}
+# {"id":"01iDtAu","date":"2019-09-27T16:32:56Z","text":"https://en.wikipedia.org\n```html\n<link rel=\"search\" type=\"application/opensearchdescription+xml\" href=\"/w/opensearch_desc.php\" title=\"Wikipedia (en)\"/>\n```\n\nhttps://en.wikipedia.org/w/opensearch_desc.php\n```\nhttps://en.wikipedia.org/w/index.php?title=Special:Search&amp;search={searchTerms}\n```"}
 # IDEA (B) 2024-07-10 Shortcut for searching by Bang codes via DuckDuckGo

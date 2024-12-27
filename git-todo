@@ -22,7 +22,7 @@ if [[ -z $diff_reference ]]; then
 fi
 
 findTodos() {
-  local rootGitDir="$(git up)"
+  local rootGitDir="$(git rev-parse --show-cdup)"
   [[ -n $rootGitDir ]] && cd "$rootGitDir"
   if [[ -n $diff_reference ]]; then
     git diff -U0 $diff_reference | grep '^+++\|^+.*\(FIXME\|XXX\|TODO\)' | perl -pe 's/^\++( b\/)?//'| grep -B 1 --color=always 'FIXME\|XXX\|TODO'
@@ -37,3 +37,6 @@ if [[ -t 1 ]]; then
 else
   findTodos
 fi
+
+# HISTORY
+# v? 2024-12-26 Explicit git command for root dir.  b2sum=564fcd40&size=1042

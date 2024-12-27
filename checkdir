@@ -37,7 +37,7 @@ SCRIPT_USAGE="${0##*/} [OPTIONS] [SUMFILE…]"
 SCRIPT_OPTIONS=(
 	"--help|help|-h  Show this help."
 	"--version       Show the script version."
-	"-a              Set encryption algorithm."
+	"-a ALG          Set encryption algorithm."
 	"-e              Only check if files in SUMFILE exist, and output missing filenames."
 	"-l              Only output the SUMFILE path found/selected."
 	"-v              Show more verbose output."
@@ -46,6 +46,7 @@ SCRIPT_DESCRIPTION_LINES=(
 	"If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed in the current directory, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
+	"0.1.1 @1735249838  Add 'ALG' to '-a' in help.   b2sum=52aa3a44&size=5484" #nosum
 	"0.1.0 @1720381791  Show progress (percent an count).   b2sum=14b0e4c8&size=5484" #nosum
 	"0.0.7 @1670970409  Support for Bash 3.2.x; require tr instead of perl.   sum:db71df2c#a=b2,l=32;size:4959" #nosum
 	"0.0.6 @1670954755  Added option -l to output selected SUM file path.   sum:8e5df517#a=b2,l=32;size:4800" #nosum
