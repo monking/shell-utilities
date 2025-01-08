@@ -1,0 +1,124 @@
+#!/bin/bash
+about()
+{
+cat <<'EOF'
+---
+summary: Wrapper for GNU date which parses ISO Week dates (e.g. '2025W023').
+version: 0.0.1
+status: stable
+dateCreated: 2025-01-07T21:33:51Z
+dateModified: 2025-01-08T18:45:19Z
+uuid: 785d13d6-3195-4c4d-a0e9-c4696412ae74
+...
+EOF
+}
+
+main()
+{
+	local dateArgs=();
+	local inputDate='';
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			-d) inputDate="$2"; shift;;
+      -v) ;; # ignore, handled outside main
+			*) dateArgs+=("$1");;
+		esac
+		shift;
+	done
+	local PAT_ISO_WEEK_NAMED='(?<year>[+-]?[0-9]+)-?W(?<week>[0-5][0-9])-?(?<day>[0-7])?(?<after>$|[^0-9][[:alnum:]:.-]*)';
+	local PAT_ISO_WEEK_TEST='W[0-5][0-9][0-7]?([^0-9]|$)';
+	if [[ -n $inputDate && $inputDate =~ $PAT_ISO_WEEK_TEST ]]; then
+    if [[ ${inputDate:0:1} == W ]]; then
+      local thisYear="$(date '+%Y')";
+      inputDate="${thisYear}${inputDate}";
+    fi
+    whisper 1 "[date-week] inputDate(${#inputDate}): ${inputDate}";
+		local oIFS="$IFS";
+		# may require perl 5.10+ for '$+{name}' references (relatedLink: https://stackoverflow.com/a/288989)
+		local substitution='s/'"$PAT_ISO_WEEK_NAMED"'/$+{year}\t$+{week}\t$+{day}\t$+{after}/';
+		local IFS=$'\t';
+		local inputDateParts=($(echo -n "$inputDate" | perl -pe "$substitution"));
+		IFS="$oIFS";
+		whisper 1 "[date-week] inputDateParts(${#inputDateParts[@]}): ${inputDateParts[*]}";
+		if [[ "${inputDateParts[0]}" != "$inputDate" ]]; then
+			local year=${inputDateParts[0]};
+			local weeks=${inputDateParts[1]};
+			local days=${inputDateParts[2]};
+			local after=${inputDateParts[3]};
+      if [[ -z $days ]]; then
+        days=1; # Starting week with Monday
+      fi
+      local firstDayOfYearDate="${year}-01-01";
+      local firstDayOfYearWeekday="$(date -d "${firstDayOfYearDate}" '+%u')";
+			let 'days=days + (weeks-1)*7 - firstDayOfYearWeekday';
+			dateArgs+=(-d "${firstDayOfYearDate}${after} +${days}days");
+		else
+			>&2 echo "[date-week] WARNING: no change in input, despite matching week pattern in input.";
+		fi
+	fi
+	whisper 1 "[date-week] (${#dateArgs[@]} args) \$ date ${dateArgs[*]}";
+	date "${dateArgs[@]}";
+}
+
+showHelp()
+{
+  echo "USAGE: $(basename "$0") [OPTIONS] [-d DATE]";
+  echo "SUMMARY: Wrapper for GNU date which parses ISO Week dates (e.g. '2025W023').";
+  echo "OPTIONS:";
+  echo "(";
+  echo " -h, --help";
+  echo "    Show this help and exit.";
+  echo;
+  echo " -v, --verbose";
+  echo "    Show more info. Can be used multiple times.";
+  echo;
+  echo " -V, --about";
+  echo "    Show script metadata and exit.";
+  echo;
+  echo " --test";
+  echo "    Run tests and exit.";
+
+
+
+}
+
+runTests()
+{
+  debug()
+  {
+    local name="$1";
+    shift;
+    local logPrefix="[date-week:test(${name})]";
+    >&2 echo "${logPrefix} \$ $*";
+    local result="$("$@")";
+    local status=$?;
+    >&2 echo "${logPrefix} status $status, output: ${result}";
+    >&2 echo;
+    return $status;
+  }
+
+  local debugOutputFormat='%Y-%m-%dT%H:%M:%S%z';
+  debug "after" main -d '2025W022T08:00-08' "+${debugOutputFormat}";
+  local now="$(date "+${debugOutputFormat}")";
+  local nowWeek="$(date -d "$now" '+%YW%V%uT%H:%M:%S%z')";
+  whisper 1 "[date-week:test] now: ${now}, inputting '${nowWeek}'";
+  debug "this week" main -d "$nowWeek" "+${debugOutputFormat}";
+  debug "week only" main -d 'W05' "+${debugOutputFormat}";
+  debug "dashes" main -d '2025-W15-3' "+${debugOutputFormat}";
+}
+
+g_verbosity=0;
+knock() { [[ $g_verbosity -ge $1 ]]; }
+whisper() { knock $1 || return; shift; >&2 echo "$@"; }
+
+# Handle args which switch/affect outside of 'main' function.
+for arg in "$@"; do
+  case "$arg" in
+    -v|--verbose) let g_verbosity++;;
+    -V|--about) about; exit;; # "V" for "version"
+    -h|--help) showHelp; exit;;
+    --test) runTests; exit;;
+  esac
+done
+
+main "$@";

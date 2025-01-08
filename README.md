@@ -4,6 +4,7 @@ These are extracts from my homespun scripts which I've prepared for general use
 by anyone.
 
 - [`canon`](./canon): recursively resolve any symlinks to get the "canonical" path
+- [`date-week`](./date-week): Wrapper for GNU date which parses ISO Week dates (e.g. '2025W023').
 - [`git-branch-grep`](./git-branch-grep): grep branches, returns the best match, or gives feedback when it fails
 - [`git-todo`](./git-todo): search for _new_ notes in source code (compared with a "main" git branch)
 - [`sumdir`](./sumdir) & [`checkdir`](./checkdir): generate & verify hashes for files, with good defaults (uses `.SUM*` files)
