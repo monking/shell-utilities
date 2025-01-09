@@ -4,10 +4,10 @@ about()
 cat <<'EOF'
 ---
 summary: Wrapper for GNU date which parses ISO Week dates (e.g. '2025W023').
-version: 0.0.1
-status: stable
+version: 0.0.2
+status: unstable
 dateCreated: 2025-01-07T21:33:51Z
-dateModified: 2025-01-08T18:45:19Z
+dateModified: 
 uuid: 785d13d6-3195-4c4d-a0e9-c4696412ae74
 ...
 EOF
@@ -42,7 +42,7 @@ main()
 		whisper 1 "[date-week] inputDateParts(${#inputDateParts[@]}): ${inputDateParts[*]}";
 		if [[ "${inputDateParts[0]}" != "$inputDate" ]]; then
 			local year=${inputDateParts[0]};
-			local weeks=${inputDateParts[1]};
+			local weeks=${inputDateParts[1]#0};
 			local days=${inputDateParts[2]};
 			local after=${inputDateParts[3]};
       if [[ -z $days ]]; then
@@ -105,6 +105,7 @@ runTests()
   debug "this week" main -d "$nowWeek" "+${debugOutputFormat}";
   debug "week only" main -d 'W05' "+${debugOutputFormat}";
   debug "dashes" main -d '2025-W15-3' "+${debugOutputFormat}";
+  debug "08" main -d '2025W08' "+${debugOutputFormat}";
 }
 
 g_verbosity=0;
