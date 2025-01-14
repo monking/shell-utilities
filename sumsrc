@@ -17,7 +17,8 @@ showHelp() {
 	echo " -h    Show this help";
 	#echo " -f FORMAT";
 	#echo "       Specify source FORMAT, so that comments can be escaped correctly (only sh and vim are used right now)";
-	echo " -j    Output JSON";
+	echo " -j, --json    Output JSON";
+	echo " -y, --yaml    Output YAML";
 	echo " -t    Output plain text";
 	echo " -q    Output query string (default)";
 	echo " -l N  Set digest length in bits, default ${DEFAULT_DIGEST_LENGTH} (see b2sum -l)";
@@ -33,7 +34,8 @@ while [ $# -gt 0 ]; do
 	case $1 in
 		-h) showHelp; exit;;
 		#-f) opt_inputFormat="$2"; shift;;
-		-j) opt_outputFormat='json';;
+		-j|--json) opt_outputFormat='json';;
+		-y|--yaml) opt_outputFormat='yaml';;
 		-t) opt_outputFormat='plain';;
 		-q) opt_outputFormat='query';;
 		-l) opt_sumLength=$2; shift;;
@@ -76,6 +78,7 @@ getOmitLinesPattern() {
 	echo "$pattern";
 }
 
+ALGORITHM_NAME_EXE='b2sum';
 ALGORITHM_NAME_SHORT='b2';
 if [[ -n $targetFile ]]; then
 	omitPattern="$(getOmitLinesPattern "$targetFile")";
@@ -86,12 +89,13 @@ else
 fi
 #>&2 echo -n "[DEBUG(omitPattern):\n${omitPattern}]";
 #>&2 echo -n "[DEBUG(DATA):\n${data}]" | head -20;exit 130;
-sum="$(b2sum -l ${opt_sumLength} <(echo "$data") | awk '{ print $1 }')";
+sum="$("$ALGORITHM_NAME_EXE" -l ${opt_sumLength} <(echo "$data") | awk '{ print $1 }')";
 size="$(echo "$data" | wc -c| awk '{ print $1 }')";
 case $opt_outputFormat in
-	json) echo "{\"sum\":\"${sum}\",\"a\":\"${ALGORITHM_NAME_SHORT}\",\"l\":${opt_sumLength},\"size\":${size}}";;
+  json) echo "{\"sum\":\"${sum}\",\"size\":${size},\"date\":\"$(date '+%Y-%m-%dT%H:%M:%S%z')\",\"provider\":{\"name\":\"${SCRIPT_NAME}\",\"method\":\"${ALGORITHM_NAME_EXE}\",\"length\":${opt_sumLength}}}";;
+  yaml) echo -e "---\nsum: ${sum}\nsize: ${size}\nprovider:\n  name: ${SCRIPT_NAME}\n  method: ${ALGORITHM_NAME_EXE}\n  length: ${opt_sumLength}\ndate: $(date '+%Y-%m-%dT%H:%M:%S%z')\n...";;
 	plain) echo "sum:${sum}#a=${ALGORITHM_NAME_SHORT},l=${opt_sumLength};size:${size};";;
-	query) echo "${ALGORITHM_NAME_SHORT}sum=${sum}&size=${size}";;
+	query) echo "${ALGORITHM_NAME_EXE}=${sum}&size=${size}";;
 	*) die "Unknown output form at '${opt_outputFormat}'";;
 esac
 
