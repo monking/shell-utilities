@@ -4,10 +4,10 @@ about()
 cat <<'EOF'
 ---
 summary: Wrapper for GNU date which parses ISO Week dates (e.g. '2025W023').
-version: 0.0.2
+version: 0.0.3
 status: unstable
 dateCreated: 2025-01-07T21:33:51Z
-dateModified: 
+dateModified: 2025-01-27T09:10:53-08
 uuid: 785d13d6-3195-4c4d-a0e9-c4696412ae74
 ...
 EOF
@@ -15,49 +15,54 @@ EOF
 
 main()
 {
-	local dateArgs=();
-	local inputDate='';
-	while [[ $# -gt 0 ]]; do
-		case "$1" in
-			-d) inputDate="$2"; shift;;
+  local dateArgs=();
+  local inputDate='';
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -d) inputDate="$2"; shift;;
       -v) ;; # ignore, handled outside main
-			*) dateArgs+=("$1");;
-		esac
-		shift;
-	done
-	local PAT_ISO_WEEK_NAMED='(?<year>[+-]?[0-9]+)-?W(?<week>[0-5][0-9])-?(?<day>[0-7])?(?<after>$|[^0-9][[:alnum:]:.-]*)';
-	local PAT_ISO_WEEK_TEST='W[0-5][0-9][0-7]?([^0-9]|$)';
-	if [[ -n $inputDate && $inputDate =~ $PAT_ISO_WEEK_TEST ]]; then
-    if [[ ${inputDate:0:1} == W ]]; then
-      local thisYear="$(date '+%Y')";
-      inputDate="${thisYear}${inputDate}";
-    fi
-    whisper 1 "[date-week] inputDate(${#inputDate}): ${inputDate}";
-		local oIFS="$IFS";
-		# may require perl 5.10+ for '$+{name}' references (relatedLink: https://stackoverflow.com/a/288989)
-		local substitution='s/'"$PAT_ISO_WEEK_NAMED"'/$+{year}\t$+{week}\t$+{day}\t$+{after}/';
-		local IFS=$'\t';
-		local inputDateParts=($(echo -n "$inputDate" | perl -pe "$substitution"));
-		IFS="$oIFS";
-		whisper 1 "[date-week] inputDateParts(${#inputDateParts[@]}): ${inputDateParts[*]}";
-		if [[ "${inputDateParts[0]}" != "$inputDate" ]]; then
-			local year=${inputDateParts[0]};
-			local weeks=${inputDateParts[1]#0};
-			local days=${inputDateParts[2]};
-			local after=${inputDateParts[3]};
-      if [[ -z $days ]]; then
-        days=1; # Starting week with Monday
-      fi
-      local firstDayOfYearDate="${year}-01-01";
-      local firstDayOfYearWeekday="$(date -d "${firstDayOfYearDate}" '+%u')";
-			let 'days=days + (weeks-1)*7 - firstDayOfYearWeekday';
-			dateArgs+=(-d "${firstDayOfYearDate}${after} +${days}days");
+      *) dateArgs+=("$1");;
+    esac
+    shift;
+  done
+  local PAT_ISO_WEEK_NAMED='(?<year>[+-]?[0-9]+)-?W(?<week>[0-5][0-9])-?(?<day>[0-7])?(?<after>$|[^0-9][[:alnum:]:.-]*)';
+  local PAT_ISO_WEEK_TEST='W[0-5][0-9][0-7]?([^0-9]|$)';
+  if [[ -n $inputDate ]]; then
+		if [[ $inputDate =~ $PAT_ISO_WEEK_TEST ]]; then
+			whisper 2 "[date-week] input matches PAT_ISO_WEEK_TEST /$PAT_ISO_WEEK_TEST/";
+			if [[ ${inputDate:0:1} == W ]]; then
+				local thisYear="$(date '+%Y')";
+				inputDate="${thisYear}${inputDate}";
+			fi
+			whisper 1 "[date-week] inputDate(${#inputDate}): ${inputDate}";
+			local oIFS="$IFS";
+			# may require perl 5.10+ for '$+{name}' references (relatedLink: https://stackoverflow.com/a/288989)
+			local substitution='s/'"$PAT_ISO_WEEK_NAMED"'/$+{year}\t$+{week}\t$+{day}\t$+{after}/';
+			local IFS=$'\t';
+			local inputDateParts=($(echo -n "$inputDate" | perl -pe "$substitution"));
+			IFS="$oIFS";
+			whisper 1 "[date-week] inputDateParts(${#inputDateParts[@]}): ${inputDateParts[*]}";
+			if [[ "${inputDateParts[0]}" != "$inputDate" ]]; then
+				local year=${inputDateParts[0]};
+				local weeks=${inputDateParts[1]#0};
+				local days=${inputDateParts[2]};
+				local after=${inputDateParts[3]};
+				if [[ -z $days ]]; then
+					days=1; # Starting week with Monday
+				fi
+				local firstDayOfYearDate="${year}-01-01";
+				local firstDayOfYearWeekday="$(date -d "${firstDayOfYearDate}" '+%u')";
+				let 'days=days + (weeks-1)*7 - firstDayOfYearWeekday';
+				dateArgs+=(-d "${firstDayOfYearDate}${after} +${days}days");
+			else
+				>&2 echo "[date-week] WARNING: no change in input, despite matching week pattern in input.";
+			fi
 		else
-			>&2 echo "[date-week] WARNING: no change in input, despite matching week pattern in input.";
+			dateArgs+=(-d "$inputDate");
 		fi
-	fi
-	whisper 1 "[date-week] (${#dateArgs[@]} args) \$ date ${dateArgs[*]}";
-	date "${dateArgs[@]}";
+  fi
+  whisper 1 "[date-week] (${#dateArgs[@]} args) \$ date ${dateArgs[*]}";
+  date "${dateArgs[@]}";
 }
 
 showHelp()
@@ -123,3 +128,5 @@ for arg in "$@"; do
 done
 
 main "$@";
+
+exit;
