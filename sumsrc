@@ -8,6 +8,8 @@ yield() { if [ "$_is_yielded" == "true" ]; then die "Aborting because of above e
 SCRIPT_NAME="${0##*/}";
 DEFAULT_DIGEST_LENGTH=32;
 DEFAULT_OUTPUT_FORMAT='query';
+DEFAULT_ALGORITHM_NAME_EXE='b2sum';
+DEFAULT_ALGORITHM_NAME_SHORT='b2';
 showHelp() {
 	echo "USAGE (STDIN or PATH modes):";
 	echo "[…] | ${SCRIPT_NAME} [OPTIONS]";
@@ -15,18 +17,21 @@ showHelp() {
 	echo "";
 	echo "OPTIONS:";
 	echo " -h    Show this help";
+  echo " -a A  Set algorithm to A; any name that has a *sum command, e.g. b2, sha256.";
 	#echo " -f FORMAT";
 	#echo "       Specify source FORMAT, so that comments can be escaped correctly (only sh and vim are used right now)";
 	echo " -j, --json    Output JSON";
 	echo " -y, --yaml    Output YAML";
 	echo " -t    Output plain text";
 	echo " -q    Output query string (default)";
-	echo " -l N  Set digest length in bits, default ${DEFAULT_DIGEST_LENGTH} (see b2sum -l)";
+	echo " -l N  Set digest length in bits, default ${DEFAULT_DIGEST_LENGTH} (see ${DEFAULT_ALGORITHM_NAME_SHORT} -l)";
 	echo "";
 	echo "EXAMPLE:";
 	echo "  cat myfile.txt | ${SCRIPT_NAME}";
 }
 
+algorithmNameExe="$DEFAULT_ALGORITHM_NAME_EXE";
+algorithmNameShort="$DEFAULT_ALGORITHM_NAME_SHORT";
 targetFile=
 opt_sumLength=$DEFAULT_DIGEST_LENGTH;
 opt_outputFormat=$DEFAULT_OUTPUT_FORMAT;
@@ -34,6 +39,14 @@ while [ $# -gt 0 ]; do
 	case $1 in
 		-h) showHelp; exit;;
 		#-f) opt_inputFormat="$2"; shift;;
+    -a)
+      a="${2}";
+      ax="${a}sum";
+      if command -v "$ax" &>/dev/null; then
+        algorithmNameShort="$a";
+        algorithmNameExe="$ax";
+        shift;
+      fi;;
 		-j|--json) opt_outputFormat='json';;
 		-y|--yaml) opt_outputFormat='yaml';;
 		-t) opt_outputFormat='plain';;
@@ -78,8 +91,6 @@ getOmitLinesPattern() {
 	echo "$pattern";
 }
 
-ALGORITHM_NAME_EXE='b2sum';
-ALGORITHM_NAME_SHORT='b2';
 if [[ -n $targetFile ]]; then
 	omitPattern="$(getOmitLinesPattern "$targetFile")";
 	data="$(grep -E -v "$omitPattern" "$targetFile")";
@@ -89,13 +100,17 @@ else
 fi
 #>&2 echo -n "[DEBUG(omitPattern):\n${omitPattern}]";
 #>&2 echo -n "[DEBUG(DATA):\n${data}]" | head -20;exit 130;
-sum="$("$ALGORITHM_NAME_EXE" -l ${opt_sumLength} <(echo "$data") | awk '{ print $1 }')";
+sumCommand=("$algorithmNameExe");
+if [[ $algorithmNameShort == 'b2' && $opt_sumLength -gt 0 ]]; then
+  sumCommand+=(-l ${opt_sumLength});
+fi
+sum="$("${sumCommand[@]}" <(echo "$data") | awk '{ print $1 }')";
 size="$(echo "$data" | wc -c| awk '{ print $1 }')";
 case $opt_outputFormat in
-  json) echo "{\"sum\":\"${sum}\",\"size\":${size},\"date\":\"$(date '+%Y-%m-%dT%H:%M:%S%z')\",\"provider\":{\"name\":\"${SCRIPT_NAME}\",\"method\":\"${ALGORITHM_NAME_EXE}\",\"length\":${opt_sumLength}}}";;
-  yaml) echo -e "---\nsum: ${sum}\nsize: ${size}\nprovider:\n  name: ${SCRIPT_NAME}\n  method: ${ALGORITHM_NAME_EXE}\n  length: ${opt_sumLength}\ndate: $(date '+%Y-%m-%dT%H:%M:%S%z')\n...";;
-	plain) echo "sum:${sum}#a=${ALGORITHM_NAME_SHORT},l=${opt_sumLength};size:${size};";;
-	query) echo "${ALGORITHM_NAME_EXE}=${sum}&size=${size}";;
+  json) echo "{\"sum\":\"${sum}\",\"size\":${size},\"date\":\"$(date '+%Y-%m-%dT%H:%M:%S%z')\",\"provider\":{\"name\":\"${SCRIPT_NAME}\",\"method\":\"${algorithmNameExe}\",\"length\":${opt_sumLength}}}";;
+  yaml) echo -e "---\nsum: ${sum}\nsize: ${size}\nprovider:\n  name: ${SCRIPT_NAME}\n  method: ${algorithmNameExe}\n  length: ${opt_sumLength}\ndate: $(date '+%Y-%m-%dT%H:%M:%S%z')\n...";;
+	plain) echo "sum:${sum}#a=${algorithmNameShort},l=${opt_sumLength};size:${size};";;
+	query) echo "${algorithmNameExe}=${sum}&size=${size}";;
 	*) die "Unknown output form at '${opt_outputFormat}'";;
 esac
 
