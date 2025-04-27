@@ -22,8 +22,8 @@ showHelp() {
 	#echo "       Specify source FORMAT, so that comments can be escaped correctly (only sh and vim are used right now)";
 	echo " -j, --json    Output JSON";
 	echo " -y, --yaml    Output YAML";
-	echo " -t    Output plain text";
-	echo " -q    Output query string (default)";
+	echo " -t, --text    Output plain text";
+	echo " -q, --query   Output query string (default)";
 	echo " -l N  Set digest length in bits, default ${DEFAULT_DIGEST_LENGTH} (see ${DEFAULT_ALGORITHM_NAME_SHORT} -l)";
 	echo "";
 	echo "EXAMPLE:";
@@ -49,8 +49,8 @@ while [ $# -gt 0 ]; do
       fi;;
 		-j|--json) opt_outputFormat='json';;
 		-y|--yaml) opt_outputFormat='yaml';;
-		-t) opt_outputFormat='plain';;
-		-q) opt_outputFormat='query';;
+		-t|--text) opt_outputFormat='plain';;
+		-q|--query) opt_outputFormat='query';;
 		-l) opt_sumLength=$2; shift;;
 		*) if [[ -z $targetFile ]]; then targetFile="$1"; else flag "Unknown arg '$1'"; fi;;
 	esac
@@ -115,9 +115,10 @@ case $opt_outputFormat in
 esac
 
 ## HISTORY:
-# v0.1.0  2022-12-13  Optional JSON output. Adding -h documentation.  b2sum=0c305a3b&size=1592
-# v0.2.0  2022-12-16  2nd mode, PATH arg instead of STDIN; Renamed 'sumsrc' from 'sum-stream'.  b2sum=bf10f132&size=2041
-# v0.3.0  2022-12-19  Add query output format. Include '#!...' execution comment in sum. Change 'sum' key to '*sum' where '*' is algorithm short name. b2sum=b64e99f0&size=2364
-# v0.4.0  2022-12-20  Adapt comment pattern to input source language (stub: only Vim by file name).  b2sum=beaa596f&size=2691
-# v0.5.0  2024-07-07  Fix omit pattern for grep -E. Adding to shell-utilities.   b2sum=d23acaeb&size=2787
+# v0.1.0 2022-12-13  Optional JSON output. Adding -h documentation.   b2sum=0c305a3b&size=1592
+# v0.2.0 2022-12-16  2nd mode, PATH arg instead of STDIN; Renamed 'sumsrc' from 'sum-stream'.   b2sum=bf10f132&size=2041
+# v0.3.0 2022-12-19  Add query output format. Include '#!...' execution comment in sum. Change 'sum' key to '*sum' where '*' is algorithm short name.   b2sum=b64e99f0&size=2364
+# v0.4.0 2022-12-20  Adapt comment pattern to input source language (stub: only Vim by file name).   b2sum=beaa596f&size=2691
+# v0.5.0 2024-07-07  Fix omit pattern for grep -E. Adding to shell-utilities.   b2sum=d23acaeb&size=2787
+# v0.5.1 2025-04-25  Add full flags for --text, --query, for parameterized scripting.   b2sum=c26fba89&size=3871
 # STUB  2024-06-05  Support more formats, and allow specifying with input option arg.
