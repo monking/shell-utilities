@@ -3,7 +3,7 @@ about()
 {
 cat <<'EOF'
 ---
-summary: Wrapper for GNU date which parses ISO Week dates (e.g. '2025W023').
+summary: Wrapper for GNU date which parses ISO Week dates (e.g. `2025W022` from `date-week -d 2025-01-07 '+%YW%V%u'`).
 version: 0.0.3
 status: unstable
 dateCreated: 2025-01-07T21:33:51Z
@@ -13,6 +13,8 @@ uuid: 785d13d6-3195-4c4d-a0e9-c4696412ae74
 EOF
 }
 
+DATEFORMAT_WEEKDATE='%YW%V%u';
+
 main()
 {
   local dateArgs=();
@@ -20,6 +22,7 @@ main()
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -d) inputDate="$2"; shift;;
+			-W|--format=weekdate) dateArgs+=("+${DATEFORMAT_WEEKDATE}");; # CL 2025-05-22
       -v) ;; # ignore, handled outside main
       *) dateArgs+=("$1");;
     esac
@@ -71,6 +74,9 @@ showHelp()
   echo "SUMMARY: Wrapper for GNU date which parses ISO Week dates (e.g. '2025W023').";
   echo "OPTIONS:";
   echo "(";
+  echo " -W, --format=weekdate";
+  echo "    Format '+${DATEFORMAT_WEEKDATE}'.";
+  echo;
   echo " -h, --help";
   echo "    Show this help and exit.";
   echo;
