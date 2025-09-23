@@ -1,4 +1,3 @@
-#!/bin/bash
 containsAny() {
 	# ---
 	# name: containsAny
@@ -46,4 +45,3 @@ containsAny() {
   done
   return 1;
 }
-containsAny "$@";
