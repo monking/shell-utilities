@@ -1,479 +1,486 @@
 #!/bin/bash
 # Author: Christopher Lovejoy <c@lovejoy.io>
 
+# Sections:
+# + DOCUMENTATION
+# + APPLICATION
+# + PLUMBING
+# + CONFIGURATION
+# + EXECUTION
 
-## PLUMBING
+## DOCUMENTATION:
+{
+  SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
+  SCRIPT_EXAMPLE_COLUMNS=(script description);
+  SCRIPT_EXAMPLES=()
+  SCRIPT_EXAMPLES+=("sumdir -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
+  SCRIPT_EXAMPLES+=("sumdir -r -exec " "Output an extra column after filename with the result of … (see \`find -exec\`)")
+  SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
+  SCRIPT_VERSIONS=(
+    "0.1.8  @1760374334  Refactor execution into main function. Repair & extend documentation.  b2sum=4f000838&size=15179" #nosum
+    "0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
+    "0.1.6  @1699561902  Template can contain output path. More documentation.  b2sum=6ef9ea3c&size=13289" #nosum
+    "0.1.5  @1697677091  Fallback to xargs for executing digest commands if parallel not found.  b2sum=fb9ebc12&size=12228&commit=9b8aeca" #nosum
+    "0.1.4  @1695831187  Improved documentation, esp. environment variables.  b2sum=ad161516&size=11916" #nosum
+    "0.1.3  @1681229730  Sort digest output by file path.  b2sum=af60835a&size=11528" #nosum
+    "0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum=5252a8b4&b2_length=32&size=11500" #nosum
+    "0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum=f6a28dc2&b2_length=32&size=12099" #nosum
+    "0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names." #nosum
+    "0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value." #nosum
+    "0.0.8  @1669653009  Add support for multiple optional PATH arguments." #nosum
+    "0.0.7  @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #nosum
+    "0.0.6  @1664219098  Adding SUMDIR_* env config. Put directory path in output file, with option '-l'." #nosum
+    "0.0.4  @1664178613  Exclude .git contents." #nosum
+    "0.0.3  @1664177599  '-r' To let find go deep; args after -- go to find." #nosum
+    "0.0.2  @1664175862  Added --exclude PATTERN option." #nosum
+    "0.0.1  @1664175274" #nosum
+  );
+  SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}";
+  SCRIPT_VERSION_NICE="v${SCRIPT_VERSION%%  *}";
 
-yell() { echo "$@" >&2; }
-die() { yell "$@"; exit 111; }
-must() { "$@" || die "cannot $*"; }
-whisper() { local volume=$1; shift; [[ $opt_verbose -ge $volume ]] && yell "$@"; }
-getValueIfDefined() {
-	varName="$1";
-	eval "[ -n \"\${${varName}+v}\" ] && echo -en \"\$${varName}\"";
-	local status=$?;
-	return $status;
+  showHelp() {
+    echo "USAGE: $SCRIPT_USAGE";
+    echo "PURPOSE: $SCRIPT_PURPOSE";
+    echo "";
+    echo "OPTIONS:";
+    SCRIPT_OPTIONS=(
+      "-h,--help,help"
+      "    Show this help"
+      ""
+      "-a CMD"
+      "    Hashing algorithm to use. Currently supported: 'sha256', 'b2'. env: SUMDIR_ALGORITHM."
+      ""
+      "-r                "
+      "    Recurse into directory. env: SUMDIR_SHOULD_RECURSE"
+      ""
+      "-L                "
+      "    Dereference (follow) symlinks. env: SUMDIR_SHOULD_DEREFERENCE"
+      ""
+      "-1,--single"
+      "    Remove existing *SUM* SUMFILEs in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
+      ""
+      "-o,--out TEMPLATE"
+      "    Output file name template. See 'TEMPLATES' below for substitution patterns. env: SUMDIR_OUTPUT_FILE_TEMPLATE"
+      ""
+      "-l                "
+      "    hostname and PWD in output SUMFILE. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
+      ""
+      "-z,--tz TZ"
+      "    Set timezone for timestamp; default 'UTC'. env: SUMDIR_TIMEZONE"
+      ""
+      "-f,--dateformat"
+      "    Set format for timestamp (per GNU coreutils date). env: SUMDIR_DATE_FORMAT"
+      ""
+      "-v,--verbose[=N]  "
+      "    Increase the detail of the info output to STDERR. env: SUMDIR_VERBOSE"
+      ""
+      "-x,--exclude PATTERN"
+      "    Exclude files by name, via \`find \\! -name PATTERN\`. env: SUMDIR_LIST_EXCLUDE_NAME"
+      ""
+      "-X,--exclude-path PATTERN"
+      "    Exclude files by name, per \`find \\! -path PATTERN\`; usually of form '*PATTERN*'. env: SUMDIR_LIST_EXCLUDE_PATH"
+      ""
+      "--length N        "
+      "     (b2sum only) Set the length of the digest hash in bits."
+      "     Hashes appear 1/4 this length in hexadecimal (e.g --length 128 yields ."
+      "     Default and maximum is 512 (for an output 128 chars long)."
+      "     This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
+      "--"
+      "    After this, all further arguments are passed to 'find'"
+      ""
+      "--bk"
+      "    Same as -f '${OPT_OUTPUT_FILE_TEMPLATE_BK}'"
+      ""
+      "--version"
+      "    Output version information"
+    );
+    local opt;
+    for opt in "${SCRIPT_OPTIONS[@]}"; do
+      echo "  ${opt}"
+    done
+    echo "";
+    echo "DESCRIPTION:";
+    SCRIPT_DESCRIPTION_LINES=(
+      "If no PATH is specified, the current directory (\$PWD) is used."
+      ""
+      "If no SUMFILE is specified, .*SUM* and *SUM* is globbed, and the newest one is used."
+      ""
+      "TEMPLATES"
+      " The following strings are substituted for dynamic values:"
+      " '%d' or '{}'  =>  Datetime as formatted by -f"
+      " '%a'  =>  Algorithm ('sha256', 'b2', …)"
+      " '%A'  =>  Algorithm uppercase ('SHA256', 'B2', …)"
+      " "
+      ""
+      "ENVIRONMENT VARIABLES"
+      " *_SHOULD_* options expect 'true' or 'false' values."
+      " *_LIST_* options must be colon-separated like PATH."
+      ""
+      " You may set any of the options above by using the following environment variables."
+      " They are shown here with their default values, if available."
+    );
+    for line in "${SCRIPT_DESCRIPTION_LINES[@]}"; do
+      echo "  ${line}"
+    done
+    for opt in "${OPT_VAR_NAMES[@]}"; do
+      echo -n " $(getEnvOptName "$opt")";
+      defaultValue="$(getValueIfDefined $(getDefaultOptName "$opt"))" \
+        && echo -n "='${defaultValue}'";
+      echo; # newline
+    done
+    echo "";
+    echo "EXAMPLES:";
+    local exampleIndex=0;
+    local exampleColumnCount=${#SCRIPT_EXAMPLE_COLUMNS[@]};
+    local exampleColumnIndex=;
+    local exampleColumnName=;
+    for example in "${SCRIPT_EXAMPLES[@]}"; do
+      let 'exampleColumnIndex = exampleIndex % exampleColumnCount';
+      exampleColumnName="${SCRIPT_EXAMPLE_COLUMNS[$exampleColumnIndex]}";
+      if [[ 'script' == $exampleColumnName ]]; then
+        echo "  \$ ${example}";
+      elif [[ 'description' == $exampleColumnName ]]; then
+        echo "    # ${example}";
+      fi
+      let 'exampleIndex++';
+    done
+  }
+
+  ## APPLICATION:
+  main() {
+    local inputDirectories=();
+
+    setOptsFromEnvAndDefaults;
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -h|--help|help) showHelp | less; exit;;
+        -a) opt_algorithm="$2"; shift;;
+        -r) opt_should_recurse=true;;
+        -L) opt_should_dereference=true;;
+        -1|--single) opt_should_single_hash_file=true;;
+        -o|--out) opt_output_file_template="$2"; shift;;
+        -l) opt_should_include_location_in_output=true;;
+        -z|--tz) opt_timezone="$2"; shift;;
+        -f|--dateformat) opt_date_format="$2"; shift;;
+        -v|--verbose) let opt_verbose++;;
+        --verbose=*) opt_verbose=${1#*=};;
+        --length) opt_list_b2_opts+=(--length $2); shift;;
+        -x|--exclude) opt_list_exclude_name+=("$2"); shift;;
+        -X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
+        --) shift; break;;
+        --bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
+        --version) echo "${SCRIPT_VERSION_NICE} ($0)"; whisper 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
+        *) inputDirectories+=("$1");;
+      esac
+      shift;
+    done
+    whisper 1 "(Verbose output level: ${opt_verbose})";
+
+    initializeSumCommand;
+    initializeJobExecutor;
+
+    [[ ${#inputDirectories[@]} -eq 0 ]] && inputDirectories=("$PWD");
+
+
+
+    ## LOOP THROUGH INPUT DIRECTORIES
+    local dStackHeight=0
+    local cwd="$PWD";
+    local outputFilePath;
+    for dir in "${inputDirectories[@]}"; do
+      while [[ $dStackHeight -gt 0 ]]; do
+        popd &>/dev/null \
+          && let dStackHeight--;
+      done
+
+      if pushd "$dir" &>/dev/null; then
+        let dStackHeight++;
+      else
+        yell "Unable to access directory '$dir'. Skipping.";
+        continue;
+      fi
+
+      if [[ $opt_should_single_hash_file == true ]]; then
+        removeFilesByTemplate "$opt_output_file_template";
+      fi
+
+      local date="$(TZ="$opt_timezone" date "$opt_date_format")";
+
+      local outputFilename="${opt_output_file_template/\{\}/$date}";
+      outputFilename="${outputFilename/\%d/$date}";
+      outputFilename="${outputFilename/\%a/$opt_algorithm}";
+      outputFilename="${outputFilename/\%A/${algoUpper}}";
+      if [[ $outputFilename =~ / ]]; then
+        if [[ ${outputFilePath:0:1} == '/' ]]; then
+          outputFilePath="$outputFilename";
+        else
+          outputFilePath="${cwd}/${outputFilename}";
+        fi
+      else
+        outputFilePath="${dir}/${outputFilename}";
+      fi
+
+      local findArgs=();
+      if [[ $opt_should_dereference == true ]]; then
+        findArgs+=(-L);
+      fi
+      findArgs+=(.);
+      if [[ $opt_should_recurse != true ]]; then
+        findArgs+=(-maxdepth 1);
+      fi
+      findArgs+=(-type f);
+      findArgs+=(\! -name "$outputFilename");
+      if [[ ${#opt_list_exclude_path[@]} -gt 0 ]]; then
+        for pattern in "${opt_list_exclude_path[@]}"; do
+          findArgs+=(\! -path "$pattern");
+        done
+      fi
+      if [[ ${#opt_list_exclude_name[@]} -gt 0 ]]; then
+        for pattern in "${opt_list_exclude_name[@]}"; do
+          findArgs+=(\! -name "$pattern");
+        done
+      fi
+      if [[ $# -gt 0 ]]; then
+        findArgs+=("$@");
+      fi
+      findArgs+=(-print0);
+
+      whisper 1 "\$ find ${findArgs[*]}";
+      {
+        echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${CALLED_AS_WITH_ARGS}\`)";
+        echo "# Same as:  ${sumCommand[*]} FILENAMES";
+        echo "# To check file integrity, run:  ${checkCommand[*]} -c ${outputFilePath}";
+        local dirPath;
+        if [[ $opt_should_include_location_in_output == true ]]; then
+          dirPath="${PWD}"
+          if [[ $opt_should_dereference == true ]]; then
+            dirPath="$(dereferenceSymlink "${PWD}")";
+          else
+            dirPath="${PWD}"
+          fi
+          echo "# Location:  $(hostname):${dirPath}";
+        fi
+
+        ## Removing leading  `./` in paths.
+          #| sed -z 's/^\.\///' \ # BSD sed doesn't have `-z` (sed --version)
+          #| perl -pe 's/^\.\///' \ # untested @1666202382 # Pulling this convenience out for now, since it breaks compatibility.
+          #| perl -pe 's/(^|\x00)\.\//\1/g' \
+        must find "${findArgs[@]}" \
+          | sed -E 's/(^|\x00)\.\//\1/g' \
+          | "${jobExecutor[@]}" "${sumCommand[@]}" \
+          | sort -k2;
+      } > "${outputFilePath}";
+      local sumStatus=$?;
+      yell "Generated ${outputFilePath}";
+
+      if [[ $sumStatus != 0 ]]; then
+        exit $sumStatus;
+      fi
+
+    done
+  }
+  removeFilesByTemplate() {
+    local template="$1";
+
+    whisper 2 "Output filename template: ${template}";
+    local templateStar="${template//\{\}/*}";
+    templateStar="${templateStar//%d/*}";
+    templateStar="${templateStar//%a/$opt_algorithm}";
+    templateStar="${templateStar//%A/${algoUpper}}";
+    whisper 2 "Pattern for files to remove: ${templateStar}";
+    local oIFS="$IFS";
+    local IFS='*';
+    local templateParts=($templateStar);
+    local idxLastTemplatePart=$(( ${#templateParts[@]} - 1 )); # For Bash 3.2.x compatibility, rather than using index -1.
+    if [[ -n ${templateParts[$idxLastTemplatePart]} && $templateStar =~ \*$ ]]; then
+      templateParts+=("");
+    fi
+    IFS="$oIFS";
+
+    local removeCommand=trash;
+    command -v "$removeCommand" &>/dev/null || removeCommand=rm;
+
+    whisper 1 "$ $removeCommand $templateStar";
+
+    case ${#templateParts[@]} in
+      0) whisper 1 "No non-wildcard part of name template to glob by, for removing previous output sum files."; return 1;;
+      1) whisper 2 "No wildcards in template. Searching for literal name"; $removeCommand "${templateParts[0]}";;
+      2) $removeCommand "${templateParts[0]}"*"${templateParts[1]}";;
+      3) $removeCommand "${templateParts[0]}"*"${templateParts[1]}"*"${templateParts[2]}";;
+      4) $removeCommand "${templateParts[0]}"*"${templateParts[1]}"*"${templateParts[2]}"*"${templateParts[3]}";;
+    esac
+  }
+  initializeSumCommand() {
+    # Not `local`: setting in caller context.
+    sumCommand=();
+    checkCommand=();
+    jobExecutor=();
+    algoUpper='';
+    case "$(echo -n "$opt_algorithm" | toLowerCase)" in
+      sha*) opt_algorithm=sha256;
+        sumCommand=(sha256sum);
+        if ! command -v ${sumCommand[0]} &>/dev/null; then
+          if command -v shasum &>/dev/null; then
+            sumCommand=(shasum -a 256);
+          else
+            die "Missing checksum software: sha256sum or shasum.";
+          fi
+        fi
+        checkCommand=("${sumCommand[@]}");
+        if [[ ${#opt_list_sha_opts[@]} -gt 0 ]]; then
+          sumCommand+=("${opt_list_sha_opts[@]}");
+        fi
+        ;;
+      b2*|blake*) opt_algorithm=b2;
+        sumCommand=(b2sum);
+        checkCommand=("${sumCommand[@]}");
+        if [[ ${#opt_list_b2_opts[@]} -gt 0 ]]; then
+          sumCommand+=("${opt_list_b2_opts[@]}");
+        fi
+        ;;
+      *) die "Unknown sum algorithm '${opt_algorithm}'. Aborting for safety.";;
+    esac
+    sumCommand+=(--); # no more options, in case filenames/paths begin with `-`.
+    if command -v "${sumCommand[0]}" &>/dev/null; then
+      whisper 1 "Using $(which "${sumCommand[0]}")";
+    else
+      die "Missing selected checksum software: ${sumCommand[0]}.";
+    fi
+    algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
+  }
+  initializeJobExecutor() {
+    if command -v parallel &>/dev/null; then
+      jobExecutor=(parallel -0 --bar); return 0; fi;
+    if command -v xargs &>/dev/null; then
+      jobExecutor=(xargs -0); return 0; fi;
+    die "Missing parallel and xargs.";
+  }
 }
-toLowerCase() {
-	#perl -C -lne 'print uc';
-	tr '[:upper:]' '[:lower:]';
-}
-toUpperCase() {
-	#perl -C -lne 'print uc';
-	tr '[:lower:]' '[:upper:]';
-}
-getArrayFromColonList() {
-	local varName="$1";
-	local colonValue="$2";
-	local listValue=();
-	local singleValue='';
-	while [[ "$colonValue" =~ : ]]; do
-		singleValue="${colonValue%%:*}";
-		colonValue="${colonValue#*:}"; # Remove first segment from colon-delimited list.
-		if [[ -z "$singleValue" ]]; then
-			continue;
-		fi
-		listValue+=("$singleValue");
-	done
-	listValue+=("${colonValue}");
-	eval "${opt}=(\"\${listValue[@]}\")"
-}
-fullPath() {
-	local inputPath="$1";
-	echo "$(cd "${inputPath%/*}" &>/dev/null && echo -n "${PWD}/${inputPath##*/}")";
-}
-dereferenceSymlink() {
-	local linkPath="$1";
-	local realPath;
-	while [ -L "$linkPath" ]; do
-		realPath="$(readlink -- "${linkPath}")";
-		if [ ${realPath:0:1} != '/' ]; then
-			realPath="$(dirname "${linkPath}")/${realPath}";
-		fi
-		linkPath="${realPath}";
-	done
-	fullPath "${linkPath}";
-}
-sumCommand=();
-checkCommand=();
-jobExecutor=();
-g_algoUpper='';
-initializeSumCommand() {
-	case "$(echo -n "$opt_algorithm" | toLowerCase)" in
-		sha*) opt_algorithm=sha256;
-			sumCommand=(sha256sum);
-			if ! command -v ${sumCommand[0]} &>/dev/null; then
-				if command -v shasum &>/dev/null; then
-					sumCommand=(shasum -a 256);
-				else
-					die "Missing checksum software: sha256sum or shasum.";
-				fi
-			fi
-			checkCommand=("${sumCommand[@]}");
-			if [[ ${#opt_list_sha_opts[@]} -gt 0 ]]; then
-				sumCommand+=("${opt_list_sha_opts[@]}");
-			fi
-			;;
-		b2*|blake*) opt_algorithm=b2;
-			sumCommand=(b2sum);
-			checkCommand=("${sumCommand[@]}");
-			if [[ ${#opt_list_b2_opts[@]} -gt 0 ]]; then
-				sumCommand+=("${opt_list_b2_opts[@]}");
-			fi
-			;;
-		*) die "Unknown sum algorithm '${opt_algorithm}'. Aborting for safety.";;
-	esac
-	sumCommand+=(--); # no more options, in case filenames/paths begin with `-`.
-	if command -v "${sumCommand[0]}" &>/dev/null; then
-		whisper 1 "Using $(which "${sumCommand[0]}")";
-	else
-		die "Missing selected checksum software: ${sumCommand[0]}.";
-	fi
-	g_algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
-}
-initializeJobExecutor() {
-	if command -v parallel &>/dev/null; then
-		jobExecutor=(parallel -0 --bar); return 0; fi;
-	if command -v xargs &>/dev/null; then
-		jobExecutor=(xargs -0); return 0; fi;
-	die "Missing parallel and xargs.";
+
+## PLUMBING:
+{
+  yell() { echo "$@" >&2; }
+  die() { yell "$@"; exit 111; }
+  must() { "$@" || die "cannot $*"; }
+  whisper() { local volume=$1; shift; [[ $opt_verbose -ge $volume ]] && yell "$@"; }
+  getValueIfDefined() {
+    varName="$1";
+    eval "[ -n \"\${${varName}+v}\" ] && echo -en \"\$${varName}\"";
+    local status=$?;
+    return $status;
+  }
+  toLowerCase() {
+    #perl -C -lne 'print uc';
+    tr '[:upper:]' '[:lower:]';
+  }
+  toUpperCase() {
+    #perl -C -lne 'print uc';
+    tr '[:lower:]' '[:upper:]';
+  }
+  getArrayFromColonList() {
+    local varName="$1";
+    local colonValue="$2";
+    local listValue=();
+    local singleValue='';
+    while [[ "$colonValue" =~ : ]]; do
+      singleValue="${colonValue%%:*}";
+      colonValue="${colonValue#*:}"; # Remove first segment from colon-delimited list.
+      if [[ -z "$singleValue" ]]; then
+        continue;
+      fi
+      listValue+=("$singleValue");
+    done
+    listValue+=("${colonValue}");
+    eval "${opt}=(\"\${listValue[@]}\")"
+  }
+  fullPath() {
+    local inputPath="$1";
+    echo "$(cd "${inputPath%/*}" &>/dev/null && echo -n "${PWD}/${inputPath##*/}")";
+  }
+  dereferenceSymlink() {
+    local linkPath="$1";
+    local realPath;
+    while [ -L "$linkPath" ]; do
+      realPath="$(readlink -- "${linkPath}")";
+      if [ ${realPath:0:1} != '/' ]; then
+        realPath="$(dirname "${linkPath}")/${realPath}";
+      fi
+      linkPath="${realPath}";
+    done
+    fullPath "${linkPath}";
+  }
 }
 
+## CONFIGURATION:
+{
+  DEFAULT_ALGORITHM='sha256';
+  DEFAULT_DATE_FORMAT='+%Y%m%dT%H%M%SZ';
+  DEFAULT_LIST_EXCLUDE_NAME='.DS_Store:.thumbnails';
+  DEFAULT_LIST_EXCLUDE_PATH='*/.git/*:*/node_modules/*';
+  DEFAULT_OUTPUT_FILE_TEMPLATE='.SUM%A--%d'; # previously '.SHA256SUM--{}'
+  DEFAULT_SHOULD_DEREFERENCE=false;
+  DEFAULT_SHOULD_INCLUDE_LOCATION_IN_OUTPUT=false;
+  DEFAULT_SHOULD_RECURSE=false;
+  DEFAULT_SHOULD_SINGLE_HASH_FILE=false;
+  DEFAULT_TIMEZONE=UTC;
+  DEFAULT_VERBOSE=0;
+  SCRIPT_NAME="${0##*/}";
+  CALLED_AS_WITH_ARGS="${SCRIPT_NAME} $*";
+  OPT_OUTPUT_FILE_TEMPLATE_BK='%d..%ASUM';
+  OPT_VAR_NAMES=(
+  opt_algorithm
+  opt_date_format
+  opt_list_exclude_name
+  opt_list_exclude_path
+  opt_list_b2_opts
+  opt_list_sha_opts
+  opt_output_file_template
+  opt_should_dereference
+  opt_should_include_location_in_output
+  opt_should_recurse
+  opt_should_single_hash_file
+  opt_timezone
+  opt_verbose # check verbose first
+  );
+  getDefaultOptName() {
+    local opt="$1";
+    echo -n "DEFAULT${opt#opt}" | toUpperCase;
+  }
+  getEnvOptName() {
+    local opt="$1";
+    echo -n "SUMDIR${opt#opt}" | toUpperCase;
+  }
+  setOptsFromEnvAndDefaults() {
+    local missingEnv=();
+    for opt in "${OPT_VAR_NAMES[@]}"; do
+      ## Get environment variable.
+      fromVarName="$(getEnvOptName "$opt")";
+      if ! newValue="$(getValueIfDefined "$fromVarName")"; then
+        missingEnv+=("${fromVarName}");
 
+        ## Get default.
+        fromVarName="$(getDefaultOptName "$opt")";
+        if ! newValue="$(getValueIfDefined "$fromVarName")"; then
+          whisper 2 "✗ Missing env and default values for '${opt}'";
+          continue;
+        fi
+      fi
 
-## CONFIGURATION OPTIONS
-## See functions: getDefaultOptName, getEnvOptName, getValueIfDefined
-
-DEFAULT_ALGORITHM='sha256';
-DEFAULT_DATE_FORMAT='+%Y%m%dT%H%M%SZ';
-DEFAULT_LIST_EXCLUDE_NAME='.DS_Store:.thumbnails';
-DEFAULT_LIST_EXCLUDE_PATH='*/.git/*:*/node_modules/*';
-DEFAULT_OUTPUT_FILE_TEMPLATE='.SUM%A--%d'; # previously '.SHA256SUM--{}'
-DEFAULT_SHOULD_DEREFERENCE=false;
-DEFAULT_SHOULD_INCLUDE_LOCATION_IN_OUTPUT=false;
-DEFAULT_SHOULD_RECURSE=false;
-DEFAULT_SHOULD_SINGLE_HASH_FILE=false;
-DEFAULT_TIMEZONE=UTC;
-DEFAULT_VERBOSE=0;
-
-SCRIPT_NAME="${0##*/}";
-CALLED_AS_WITH_ARGS="${SCRIPT_NAME} $*";
-OPT_OUTPUT_FILE_TEMPLATE_BK='%d..%ASUM';
-OPT_VAR_NAMES=(
-opt_algorithm
-opt_date_format
-opt_list_exclude_name
-opt_list_exclude_path
-opt_list_b2_opts
-opt_list_sha_opts
-opt_output_file_template
-opt_should_dereference
-opt_should_include_location_in_output
-opt_should_recurse
-opt_should_single_hash_file
-opt_timezone
-opt_verbose # check verbose first
-);
-getDefaultOptName() {
-	local opt="$1";
-	echo -n "DEFAULT${opt#opt}" | toUpperCase;
-}
-getEnvOptName() {
-	local opt="$1";
-	echo -n "SUMDIR${opt#opt}" | toUpperCase;
-}
-
-
-## DOCUMENTATION
-
-SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
-SCRIPT_EXAMPLE_COLUMNS=(script description);
-SCRIPT_EXAMPLES=()
-SCRIPT_EXAMPLES+=("sumdir -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
-SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
-SCRIPT_OPTIONS=(
-	"-h,--help,help"
-	"    Show this help"
-	""
-	"-a CMD"
-	"    Hashing algorithm to use. Currently supported: 'sha256', 'b2'. env: SUMDIR_ALGORITHM."
-	""
-	"-r                "
-	"    into directory. env: SUMDIR_SHOULD_RECURSE"
-	""
-	"-L                "
-	"    symlinks. env: SUMDIR_SHOULD_DEREFERENCE"
-	""
-	"-1,--single"
-	"    Remove existing *SUM* SUMFILEs in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
-	""
-	"-o,--out TEMPLATE"
-	"    Output file name template. See 'TEMPLATES' below for substitution patterns. env: SUMDIR_OUTPUT_FILE_TEMPLATE"
-	""
-	"-l                "
-	"    hostname and PWD in output SUMFILE. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
-	""
-	"-z,--tz TZ"
-	"    Set timezone for timestamp; default 'UTC'. env: SUMDIR_TIMEZONE"
-	""
-	"-f,--dateformat"
-	"    Set format for timestamp (per GNU coreutils date). env: SUMDIR_DATE_FORMAT"
-	""
-	"-v,--verbose[=N]  "
-	"    the detail of the info output to STDERR. env: SUMDIR_VERBOSE"
-	""
-	"-x,--exclude PATTERN"
-	"    Exclude files by name, per find '! -name PATTERN'. env: SUMDIR_LIST_EXCLUDE_NAME"
-	""
-	"-X,--exclude-path PATTERN"
-	"    Exclude files by name, per find '! -path PATTERN'; usually of form '*PATTERN*'. env: SUMDIR_LIST_EXCLUDE_PATH"
-	""
-	"--length N        "
-	"    length in bits (b2sum only). Digests appear 1/4 this length in hexadecimal."
-	"     Default and maximum is 512 (for an output 128 chars long)."
-	"     This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
-	"     env: SUMDIR_LIST_%A_OPTS, where %A is the algorithm in upper case (SHA256 or B2)."
-	"--"
-	"    After this, all further arguments are passed to 'find'"
-	""
-	"--bk"
-	"    Same as -f '${OPT_OUTPUT_FILE_TEMPLATE_BK}'"
-	""
-	"--version"
-	"    Output version information"
-);
-SCRIPT_DESCRIPTION_LINES=(
-	"If no PATH is specified, the current directory (\$PWD) is used."
-	""
-	"If no SUMFILE is specified, .*SUM* and *SUM* is globbed, and the newest one is used."
-	""
-	"TEMPLATES"
-	" The following strings are substituted for dynamic values:"
-	" '%d' or '{}'  =>  Datetime as formatted by -f"
-	" '%a'  =>  Algorithm ('sha256', 'b2', …)"
-	" '%A'  =>  Algorithm uppercase ('SHA256', 'B2', …)"
-	" "
-	""
-	"ENVIRONMENT VARIABLES"
-	" *_SHOULD_* options expect 'true' or 'false' values."
-	" *_LIST_* options must be colon-separated like PATH."
-	""
-	" You may set any of the options above by using the following environment variables."
-	" They are shown here with their default values, if available."
-);
-for opt in "${OPT_VAR_NAMES[@]}"; do
-	line=" $(getEnvOptName "$opt")";
-	defaultValue="$(getValueIfDefined $(getDefaultOptName "$opt"))" && line+="='${defaultValue}'";
-	SCRIPT_DESCRIPTION_LINES+=("$line");
-done
-SCRIPT_VERSIONS=(
-	"0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
-	"0.1.6  @1699561902  Template can contain output path. More documentation.  b2sum=6ef9ea3c&size=13289" #nosum
-	"0.1.5  @1697677091  Fallback to xargs for executing digest commands if parallel not found.  b2sum=fb9ebc12&size=12228&commit=9b8aeca" #nosum
-	"0.1.4  @1695831187  Improved documentation, esp. environment variables.  b2sum=ad161516&size=11916" #nosum
-	"0.1.3  @1681229730  Sort digest output by file path.  b2sum=af60835a&size=11528" #nosum
-	"0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum=5252a8b4&b2_length=32&size=11500" #nosum
-	"0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum=f6a28dc2&b2_length=32&size=12099" #nosum
-	"0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names." #nosum
-	"0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value." #nosum
-	"0.0.8  @1669653009  Add support for multiple optional PATH arguments." #nosum
-	"0.0.7  @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #nosum
-	"0.0.6  @1664219098  Adding SUMDIR_* env config. Put directory path in output file, with option '-l'." #nosum
-	"0.0.4  @1664178613  Exclude .git contents." #nosum
-	"0.0.3  @1664177599  '-r' To let find go deep; args after -- go to find." #nosum
-	"0.0.2  @1664175862  Added --exclude PATTERN option." #nosum
-	"0.0.1  @1664175274" #nosum
-);
-SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}";
-SCRIPT_VERSION_NICE="v${SCRIPT_VERSION%%  *}";
-
-showHelp() {
-	echo "USAGE: $SCRIPT_USAGE";
-	echo "PURPOSE: $SCRIPT_PURPOSE";
-	echo "";
-	echo "OPTIONS:";
-	local opt;
-	for opt in "${SCRIPT_OPTIONS[@]}"; do
-		echo "  ${opt}"
-	done
-	echo "";
-	echo "DESCRIPTION:";
-	for line in "${SCRIPT_DESCRIPTION_LINES[@]}"; do
-		echo "  ${line}"
-	done
-	echo "";
-	echo "EXAMPLES:";
-	local exampleIndex=0;
-	local exampleColumnCount=${#SCRIPT_EXAMPLE_COLUMNS[@]};
-	local exampleColumnIndex=;
-	local exampleColumnName=;
-	for example in "${SCRIPT_EXAMPLES[@]}"; do
-		let 'exampleColumnIndex = exampleIndex % exampleColumnCount';
-		exampleColumnName="${SCRIPT_EXAMPLE_COLUMNS[$exampleColumnIndex]}";
-		if [[ 'script' == $exampleColumnName ]]; then
-			echo "  \$ ${example}";
-		elif [[ 'description' == $exampleColumnName ]]; then
-			echo "    # ${example}";
-		fi
-		let 'exampleIndex++';
-	done
+      if [[ $opt =~ ^opt_list_ ]]; then
+        if getArrayFromColonList $opt "$newValue"; then
+          whisper 1 "✓ ${opt}: (${#listValue[@]})[${listValue[*]}] # from ${fromVarName}";
+        else
+          yell "✗ Unable to parse colon-separated list from env var '${fromVarName}'.";
+        fi
+      else
+        eval "${opt}=\"\$newValue\"";
+        whisper 1 "✓ ${opt}: \"${newValue}\" # from ${fromVarName}";
+      fi
+    done
+    [[ ${#missingEnv[@]} -gt 0 ]] && whisper 2 "✗ No env vars for options: ${missingEnv[*]}";
+  }
 }
 
-removeFilesByTemplate() {
-	local template="$1";
-
-	whisper 2 "Output filename template: ${template}";
-	local templateStar="${template//\{\}/*}";
-	templateStar="${templateStar//%d/*}";
-	templateStar="${templateStar//%a/$opt_algorithm}";
-	templateStar="${templateStar//%A/${g_algoUpper}}";
-	whisper 2 "Pattern for files to remove: ${templateStar}";
-	local oIFS="$IFS";
-	local IFS='*';
-	local templateParts=($templateStar);
-	local idxLastTemplatePart=$(( ${#templateParts[@]} - 1 )); # For Bash 3.2.x compatibility, rather than using index -1.
-	if [[ -n ${templateParts[$idxLastTemplatePart]} && $templateStar =~ \*$ ]]; then
-		templateParts+=("");
-	fi
-	IFS="$oIFS";
-
-	local removeCommand=trash;
-	command -v "$removeCommand" &>/dev/null || removeCommand=rm;
-
-	whisper 1 "$ $removeCommand $templateStar";
-
-	case ${#templateParts[@]} in
-		0) whisper 1 "No non-wildcard part of name template to glob by, for removing previous output sum files."; return 1;;
-		1) whisper 2 "No wildcards in template. Searching for literal name"; $removeCommand "${templateParts[0]}";;
-		2) $removeCommand "${templateParts[0]}"*"${templateParts[1]}";;
-		3) $removeCommand "${templateParts[0]}"*"${templateParts[1]}"*"${templateParts[2]}";;
-		4) $removeCommand "${templateParts[0]}"*"${templateParts[1]}"*"${templateParts[2]}"*"${templateParts[3]}";;
-	esac
-}
-
-
-## ARGUMENT OPTIONS
-
-
-setOptsFromEnvAndDefaults() {
-	local missingEnv=();
-	for opt in "${OPT_VAR_NAMES[@]}"; do
-		## Get environment variable.
-		fromVarName="$(getEnvOptName "$opt")";
-		if ! newValue="$(getValueIfDefined "$fromVarName")"; then
-			missingEnv+=("${fromVarName}");
-
-			## Get default.
-			fromVarName="$(getDefaultOptName "$opt")";
-			if ! newValue="$(getValueIfDefined "$fromVarName")"; then
-				whisper 2 "✗ Missing env and default values for '${opt}'";
-				continue;
-			fi
-		fi
-
-		if [[ $opt =~ ^opt_list_ ]]; then
-			if getArrayFromColonList $opt "$newValue"; then
-				whisper 1 "✓ ${opt}: (${#listValue[@]})[${listValue[*]}] # from ${fromVarName}";
-			else
-				yell "✗ Unable to parse colon-separated list from env var '${fromVarName}'.";
-			fi
-		else
-			eval "${opt}=\"\$newValue\"";
-			whisper 1 "✓ ${opt}: \"${newValue}\" # from ${fromVarName}";
-		fi
-	done
-	[[ ${#missingEnv[@]} -gt 0 ]] && whisper 2 "✗ No env vars for options: ${missingEnv[*]}";
-}
-
-
-## EXECUTION
-
-inputDirectories=();
-
-setOptsFromEnvAndDefaults;
-
-while [[ $# -gt 0 ]]; do
-	case "$1" in
-		-h|--help|help) showHelp | less; exit;;
-		-a) opt_algorithm="$2"; shift;;
-		-r) opt_should_recurse=true;;
-		-L) opt_should_dereference=true;;
-		-1|--single) opt_should_single_hash_file=true;;
-		-o|--out) opt_output_file_template="$2"; shift;;
-		-l) opt_should_include_location_in_output=true;;
-		-z|--tz) opt_timezone="$2"; shift;;
-		-f|--dateformat) opt_date_format="$2"; shift;;
-		-v|--verbose) let opt_verbose++;;
-		--verbose=*) opt_verbose=${1#*=};;
-		--length) opt_list_b2_opts+=(--length $2); shift;;
-		-x|--exclude) opt_list_exclude_name+=("$2"); shift;;
-		-X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
-		--) shift; break;;
-		--bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
-		--version) echo "${SCRIPT_VERSION_NICE} ($0)"; whisper 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
-		*) inputDirectories+=("$1");;
-	esac
-	shift;
-done
-whisper 1 "(Verbose output level: ${opt_verbose})"
-
-initializeSumCommand;
-initializeJobExecutor;
-
-[[ ${#inputDirectories[@]} -eq 0 ]] && inputDirectories=("$PWD");
-
-
-
-## LOOP THROUGH INPUT DIRECTORIES
-dStackHeight=0
-cwd="$PWD";
-for dir in "${inputDirectories[@]}"; do
-	while [[ $dStackHeight -gt 0 ]]; do
-		popd &>/dev/null \
-			&& let dStackHeight--;
-	done
-
-	if pushd "$dir" &>/dev/null; then
-		let dStackHeight++;
-	else
-		yell "Unable to access directory '$dir'. Skipping.";
-		continue;
-	fi
-
-	if [[ $opt_should_single_hash_file == true ]]; then
-		removeFilesByTemplate "$opt_output_file_template";
-	fi
-
-	date="$(TZ="$opt_timezone" date "$opt_date_format")";
-
-	outputFilename="${opt_output_file_template/\{\}/$date}";
-	outputFilename="${outputFilename/\%d/$date}";
-	outputFilename="${outputFilename/\%a/$opt_algorithm}";
-	outputFilename="${outputFilename/\%A/${g_algoUpper}}";
-	if [[ $outputFilename =~ / ]]; then
-		if [[ ${outputFilePath:0:1} == '/' ]]; then
-			outputFilePath="$outputFilename";
-		else
-			outputFilePath="${cwd}/${outputFilename}";
-		fi
-	else
-		outputFilePath="${dir}/${outputFilename}";
-	fi
-
-	findArgs=();
-	if [[ $opt_should_dereference == true ]]; then
-		findArgs+=(-L);
-	fi
-	findArgs+=(.);
-	if [[ $opt_should_recurse != true ]]; then
-		findArgs+=(-maxdepth 1);
-	fi
-	findArgs+=(-type f);
-	findArgs+=(\! -name "$outputFilename");
-	if [[ ${#opt_list_exclude_path[@]} -gt 0 ]]; then
-		for pattern in "${opt_list_exclude_path[@]}"; do
-			findArgs+=(\! -path "$pattern");
-		done
-	fi
-	if [[ ${#opt_list_exclude_name[@]} -gt 0 ]]; then
-		for pattern in "${opt_list_exclude_name[@]}"; do
-			findArgs+=(\! -name "$pattern");
-		done
-	fi
-	if [[ $# -gt 0 ]]; then
-		findArgs+=("$@");
-	fi
-	findArgs+=(-print0);
-
-	whisper 1 "\$ find ${findArgs[*]}";
-	{
-		echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${CALLED_AS_WITH_ARGS}\`)";
-		echo "# Same as:  ${sumCommand[*]} FILENAMES";
-		echo "# To check file integrity, run:  ${checkCommand[*]} -c ${outputFilePath}";
-		if [[ $opt_should_include_location_in_output == true ]]; then
-			dirPath="${PWD}"
-			if [[ $opt_should_dereference == true ]]; then
-				dirPath="$(dereferenceSymlink "${PWD}")";
-			else
-				dirPath="${PWD}"
-			fi
-			echo "# Location:  $(hostname):${dirPath}";
-		fi
-
-		## Removing leading  `./` in paths.
-			#| sed -z 's/^\.\///' \ # BSD sed doesn't have `-z` (sed --version)
-			#| perl -pe 's/^\.\///' \ # untested @1666202382 # Pulling this convenience out for now, since it breaks compatibility.
-			#| perl -pe 's/(^|\x00)\.\//\1/g' \
-		must find "${findArgs[@]}" \
-			| sed -E 's/(^|\x00)\.\//\1/g' \
-			| "${jobExecutor[@]}" "${sumCommand[@]}" \
-			| sort -k2;
-	} > "${outputFilePath}";
-	sumStatus=$?;
-	yell "Generated ${outputFilePath}";
-
-	if [[ $sumStatus != 0 ]]; then
-		exit $sumStatus;
-	fi
-
-done
+## EXECUTION:
+main "$@";
