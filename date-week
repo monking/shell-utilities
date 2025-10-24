@@ -4,10 +4,10 @@ about()
 cat <<'EOF'
 ---
 summary: Wrapper for GNU date which parses ISO Week dates (e.g. `2025W022` from `date-week -d 2025-01-07 '+%YW%V%u'`).
-version: 0.0.3
+version: 0.0.5
 status: unstable
 dateCreated: 2025-01-07T21:33:51Z
-dateModified: 2025-01-27T09:10:53-08
+dateModified: 2025-10-23T13:47:53Z
 uuid: 785d13d6-3195-4c4d-a0e9-c4696412ae74
 ...
 EOF
@@ -19,50 +19,61 @@ main()
 {
   local dateArgs=();
   local inputDate='';
+  local dateFormat=;
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --format)
+        if [[ -n $dateFormat ]]; then
+          echo "$dateFormat";
+        else
+          echo "$DATEFORMAT_WEEKDATE";
+        fi
+        return;;
       -d) inputDate="$2"; shift;;
-			-W|--format=weekdate) dateArgs+=("+${DATEFORMAT_WEEKDATE}");; # CL 2025-05-22
+      -W|--format=weekdate) dateFormat="$DATEFORMAT_WEEKDATE";;
+      +*) dateFormat="${1#+}";;
+      --format=*) dateFormat="${1#--format=}";; # for discoverability beside =weekdate
       -v) ;; # ignore, handled outside main
       *) dateArgs+=("$1");;
     esac
     shift;
   done
+  dateArgs+=("+${dateFormat}");
   local PAT_ISO_WEEK_NAMED='(?<year>[+-]?[0-9]+)-?W(?<week>[0-5][0-9])-?(?<day>[0-7])?(?<after>$|[^0-9][[:alnum:]:.-]*)';
   local PAT_ISO_WEEK_TEST='W[0-5][0-9][0-7]?([^0-9]|$)';
   if [[ -n $inputDate ]]; then
-		if [[ $inputDate =~ $PAT_ISO_WEEK_TEST ]]; then
-			whisper 2 "[date-week] input matches PAT_ISO_WEEK_TEST /$PAT_ISO_WEEK_TEST/";
-			if [[ ${inputDate:0:1} == W ]]; then
-				local thisYear="$(date '+%Y')";
-				inputDate="${thisYear}${inputDate}";
-			fi
-			whisper 1 "[date-week] inputDate(${#inputDate}): ${inputDate}";
-			local oIFS="$IFS";
-			# may require perl 5.10+ for '$+{name}' references (relatedLink: https://stackoverflow.com/a/288989)
-			local substitution='s/'"$PAT_ISO_WEEK_NAMED"'/$+{year}\t$+{week}\t$+{day}\t$+{after}/';
-			local IFS=$'\t';
-			local inputDateParts=($(echo -n "$inputDate" | perl -pe "$substitution"));
-			IFS="$oIFS";
-			whisper 1 "[date-week] inputDateParts(${#inputDateParts[@]}): ${inputDateParts[*]}";
-			if [[ "${inputDateParts[0]}" != "$inputDate" ]]; then
-				local year=${inputDateParts[0]};
-				local weeks=${inputDateParts[1]#0};
-				local days=${inputDateParts[2]};
-				local after=${inputDateParts[3]};
-				if [[ -z $days ]]; then
-					days=1; # Starting week with Monday
-				fi
-				local firstDayOfYearDate="${year}-01-01";
-				local firstDayOfYearWeekday="$(date -d "${firstDayOfYearDate}" '+%u')";
-				let 'days=days + (weeks-1)*7 - firstDayOfYearWeekday';
-				dateArgs+=(-d "${firstDayOfYearDate}${after} +${days}days");
-			else
-				>&2 echo "[date-week] WARNING: no change in input, despite matching week pattern in input.";
-			fi
-		else
-			dateArgs+=(-d "$inputDate");
-		fi
+    if [[ $inputDate =~ $PAT_ISO_WEEK_TEST ]]; then
+      whisper 2 "[date-week] input matches PAT_ISO_WEEK_TEST /$PAT_ISO_WEEK_TEST/";
+      if [[ ${inputDate:0:1} == W ]]; then
+        local thisYear="$(date '+%Y')";
+        inputDate="${thisYear}${inputDate}";
+      fi
+      whisper 1 "[date-week] inputDate(${#inputDate}): ${inputDate}";
+      local oIFS="$IFS";
+      # may require perl 5.10+ for '$+{name}' references (relatedLink: https://stackoverflow.com/a/288989)
+      local substitution='s/'"$PAT_ISO_WEEK_NAMED"'/$+{year}\t$+{week}\t$+{day}\t$+{after}/';
+      local IFS=$'\t';
+      local inputDateParts=($(echo -n "$inputDate" | perl -pe "$substitution"));
+      IFS="$oIFS";
+      whisper 1 "[date-week] inputDateParts(${#inputDateParts[@]}): ${inputDateParts[*]}";
+      if [[ "${inputDateParts[0]}" != "$inputDate" ]]; then
+        local year=${inputDateParts[0]};
+        local weeks=${inputDateParts[1]#0};
+        local days=${inputDateParts[2]};
+        local after=${inputDateParts[3]};
+        if [[ -z $days ]]; then
+          days=1; # Starting week with Monday
+        fi
+        local firstDayOfYearDate="${year}-01-01";
+        local firstDayOfYearWeekday="$(date -d "${firstDayOfYearDate}" '+%u')";
+        let 'days=days + (weeks-1)*7 - firstDayOfYearWeekday';
+        dateArgs+=(-d "${firstDayOfYearDate}${after} +${days}days");
+      else
+        >&2 echo "[date-week] WARNING: no change in input, despite matching week pattern in input.";
+      fi
+    else
+      dateArgs+=(-d "$inputDate");
+    fi
   fi
   whisper 1 "[date-week] (${#dateArgs[@]} args) \$ date ${dateArgs[*]}";
   date "${dateArgs[@]}";
@@ -70,27 +81,29 @@ main()
 
 showHelp()
 {
-  echo "USAGE: $(basename "$0") [OPTIONS] [-d DATE]";
+  echo "USAGE: $(basename "$0") [-d DATE] [+FORMAT] […]";
   echo "SUMMARY: Wrapper for GNU date which parses ISO Week dates (e.g. '2025W023').";
   echo "OPTIONS:";
-  echo "(";
+  echo " -d DATE, +FORMAT, …";
+  echo "    GNU date options are passed through.";
+  echo;
   echo " -W, --format=weekdate";
-  echo "    Format '+${DATEFORMAT_WEEKDATE}'.";
+  echo "    Use FORMAT '+${DATEFORMAT_WEEKDATE}'.";
+  echo;
+  echo " --format";
+  echo "    Show date-week strftime format string and exit.";
+  echo;
+  echo " --test";
+  echo "    Run tests and exit.";
+  echo;
+  echo " -V, --about";
+  echo "    Show script metadata and exit.";
   echo;
   echo " -h, --help";
   echo "    Show this help and exit.";
   echo;
   echo " -v, --verbose";
   echo "    Show more info. Can be used multiple times.";
-  echo;
-  echo " -V, --about";
-  echo "    Show script metadata and exit.";
-  echo;
-  echo " --test";
-  echo "    Run tests and exit.";
-
-
-
 }
 
 runTests()

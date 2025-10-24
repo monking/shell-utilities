@@ -1,220 +1,227 @@
 #!/bin/bash
 ## CONSTANTS:
 {
-  TCSCRIPT_VERSION=0.2.0
-  TCSCRIPT_DATE_MODIFIED=2025-10-13
-  TCSCRIPT_NAME="$(basename "$0")"
-  TCSCRIPT_ATTRIBUTION="${TCSCRIPT_NAME} version ${TCSCRIPT_VERSION} ${TCSCRIPT_DATE_MODIFIED} by C. Lovejoy"
+  export TCSCRIPT_VERSION=0.2.1
+  export TCSCRIPT_DATE_MODIFIED=2025-10-24
+  export TCSCRIPT_NAME="$(basename "$0")"
+  export TCSCRIPT_ATTRIBUTION="${TCSCRIPT_NAME} version ${TCSCRIPT_VERSION} ${TCSCRIPT_DATE_MODIFIED} by C. Lovejoy"
 
-	E_ARGS=1
+  E_ARGS=1
 
-	TIMECODE_COMPOUND_SCALE=(
-		1
-		60
-		60
-		24
-		365 # @( hack ) using only ints, discarding leapyear day, but more friendly for formatting
-	)
-	TIMECODE_UNITS=(
-		second
-		minute
-		hour
-		day
-		year
-	)
-}
-
-## APPLICATION:
-main()
-{
-  local status=0
-  local showUnits=false
-  local shouldDecode=false
-  local duration
-  while [[ $# -gt 0 ]]; do
-    case $1 in
-      -d|--decode) shouldDecode=true;;
-      -u|u) showUnits=true;;
-      -h|--help|h) showHelp; exit;;
-      -V|--version) echo "$TCSCRIPT_ATTRIBUTION"; exit;;
-      *) duration="$1";;
-    esac
-    shift
-  done
-
-  if [[ -z $duration ]]; then
-    echo "Please pass one duration argument."
-    exit 1
-  fi
-
-  if [[ $shouldDecode == true ]]
-  then
-    secondsFromTimecode "$duration"
-    status=$?
-  else
-    timecode="$(normalizeTimeCode "$duration")"
-    status=$?
-    if [[ $showUnits = true ]]; then
-      timecode="$(describeTimecode "$timecode")"
-    fi
-
-    echo -n "$timecode"
-    echo "" >&2
-  fi
-  return $status
+  TIMECODE_COMPOUND_SCALE=(
+    1
+    60
+    60
+    24
+    365 # @( hack ) using only ints, discarding leapyear day, but more friendly for formatting
+  )
+  TIMECODE_UNITS=(
+    second
+    minute
+    hour
+    day
+    year
+  )
 }
 
 ## FUNCTIONS:
 {
-	showHelp() {
-		echo "USAGE: timecode [-uh] SECONDS"
-		echo
-		echo "OPTIONS:"
+  feedback() {
+    echo "$@" >&2
+  }
+
+  pad() {
+    local length=$1
+    local padChar="$2"
+    local string="$3"
+    while [[ ${#string} -lt $length ]]; do
+      string="${padChar}${string}"
+    done
+    echo -n "$string"
+  }
+
+  secondsFromTimecode() {
+    local input="$1"
+    if [[ $input =~ ^[0-9.:]+$ ]]; then
+      local inputInteger=$input
+      local decimal=
+      if [[ $inputInteger =~ \. ]]; then
+        local decimal=${inputInteger/*./}
+        [[ -n $decimal ]] && decimal=".${decimal}"
+        inputInteger=${inputInteger/.*/}
+      fi
+      local oIFS="$IFS"
+      local IFS=":"
+      local timecodeSegments=($inputInteger)
+      local IFS="$oIFS"
+      local scale=1
+      local segmentIndex
+      local output=0
+
+      local i
+      for (( i=0; i < ${#timecodeSegments[@]}; i++ )); do
+        local segmentIndex=$(( ${#timecodeSegments[@]} - 1 - i ))
+        scale=$(( scale * ${TIMECODE_COMPOUND_SCALE[$i]} ))
+        # feedback "scale $i) $scale; FORMULA: $output + ${timecodeSegments[$segmentIndex]} * $scale" # XXX
+        output=$(echo "$output + ${timecodeSegments[$segmentIndex]} * $scale" | bc)
+      done
+      [[ -n $decimal ]] && output+="${decimal}"
+    else
+      output="$input"
+    fi
+
+    # feedback "secondsFromTimecode ($input)>'$output'" # XXX
+
+    echo -n $output
+  }
+
+  timecodeFromSeconds() {
+    local status=0
+    local input="$1"
+    if [[ $input =~ ^[0-9.]+$ ]]; then
+      local remainder=$input
+      local decimal=
+      if [[ $input =~ \. ]]; then
+        local decimal=${remainder/*./}
+        [[ -n $decimal ]] && decimal=".${decimal}"
+        remainder=${remainder/.*/}
+      fi
+      local timecodeSegments=()
+      local i nextI newTimecodeSegments newSegment
+      for (( i=0; i < ${#TIMECODE_COMPOUND_SCALE[@]}; i++ )); do # start from minutes
+        let nextI=$(( i + 1 ))
+        if [[ $nextI -lt ${#TIMECODE_COMPOUND_SCALE[@]} ]]; then
+          newSegment=$(( remainder % ${TIMECODE_COMPOUND_SCALE[$nextI]} ))
+          remainder=$(( remainder / ${TIMECODE_COMPOUND_SCALE[$nextI]} )) # int
+        else
+          newSegment=$remainder
+          remainder=0
+        fi
+        if [[ $newSegment -gt 0 || $remainder -gt 0 ]]; then
+          newTimecodeSegments=($(pad 2 '0' "$newSegment"))
+          [[ ${#timecodeSegments[@]} -gt 0 ]] && newTimecodeSegments+=(${timecodeSegments[@]}) # i.e. prepend new
+          timecodeSegments=(${newTimecodeSegments[@]})
+        else
+          break
+        fi
+      done
+      
+      if [[ ${#timecodeSegments[@]} -gt 0 ]]; then
+        local oIFS="$IFS"
+        local IFS=":"
+      local output=''
+      if [[ ${#timecodeSegments[@]} -eq 1 ]]; then
+        output+='00:'
+      fi
+      output+="${timecodeSegments[*]}${decimal:0:4}"
+        local IFS="$oIFS"
+      else
+        output='00:00.000'
+      fi
+    else
+      output="$input"
+      status=2
+    fi
+
+    # feedback "timecodeFromSeconds ($input)>'$output'" # XXX
+
+    echo -n $output
+    return $status
+  }
+
+  normalizeTimeCode() {
+    local normalized status=0
+    normalized="$(timecodeFromSeconds "$(secondsFromTimecode "$1")")"
+    status=$?
+    # feedback "normalized '$1' to '$normalized'" # XXX
+    echo -n "$normalized"
+    return $status
+  }
+
+  doTimecodesDiffer() {
+    a="$(normalizeTimeCode $1)"
+    b="$(normalizeTimeCode $2)"
+    # feedback "doTimecodesDiffer ($1)>'$a' ($2)>'$b'" # XXX
+    [[ $a != $b ]]
+  }
+
+  describeTimecode() {
+    local input="$1"
+    local output="$input"
+
+    local oIFS="$IFS"
+    local IFS=$':'
+    local timecodeSegments=($input)
+    IFS="$oIFS"
+
+    local lastSegmentIndex=$(( ${#timecodeSegments[@]} - 1 ))
+    output+=" ${TIMECODE_UNITS[$lastSegmentIndex]}"
+    if [[ ${timecodeSegments[$lastSegmentIndex]} != '01' ]]; then # @( hack ) comparison against padded string
+      output+="s"
+    fi
+
+    # feedback "input: '$input', output: '$output'" # XXX
+
+    echo -n "$output"
+  }
+}
+
+## APPLICATION:
+{
+  timecode()
+  {
+    local status=0
+    local showUnits=false
+    local shouldDecode=false
+    local duration
+    while [[ $# -gt 0 ]]; do
+      case $1 in
+        -d|--decode) shouldDecode=true;;
+        -u|u) showUnits=true;;
+        -h|--help|h) timecode_showHelp; exit;;
+        -V|--version) echo "$TCSCRIPT_ATTRIBUTION"; exit;;
+        *) duration="$1";;
+      esac
+      shift
+    done
+
+    if [[ -z $duration ]]; then
+      echo "Please pass one duration argument."
+      exit 1
+    fi
+
+    if [[ $shouldDecode == true ]]
+    then
+      secondsFromTimecode "$duration"
+      status=$?
+    else
+      timecode="$(normalizeTimeCode "$duration")"
+      status=$?
+      if [[ $showUnits = true ]]; then
+        timecode="$(describeTimecode "$timecode")"
+      fi
+
+      echo -n "$timecode"
+      echo "" >&2
+    fi
+    return $status
+  }
+  timecode_showHelp() {
+    echo "USAGE: timecode [-uh] SECONDS"
+    echo
+    echo "OPTIONS:"
     echo " -d   Decode timecode, output seconds. Alias --decode."
-		echo " -u   Show units"
-		echo " -h   Show this help"
-		echo " -V   Show version number. Alias --version."
+    echo " -u   Show units"
+    echo " -h   Show this help"
+    echo " -V   Show version number. Alias --version."
     echo
     echo "$TCSCRIPT_ATTRIBUTION"
-	}
-
-	whisper() {
-		echo "$@" >&2
-	}
-
-	pad() {
-		local length=$1
-		local padChar="$2"
-		local string="$3"
-		while [[ ${#string} -lt $length ]]; do
-			string="${padChar}${string}"
-		done
-		echo -n "$string"
-	}
-
-	secondsFromTimecode() {
-		local input="$1"
-		if [[ $input =~ ^[0-9.:]+$ ]]; then
-			local inputInteger=$input
-			local decimal=
-			if [[ $inputInteger =~ \. ]]; then
-				local decimal=${inputInteger/*./}
-				[[ -n $decimal ]] && decimal=".${decimal}"
-				inputInteger=${inputInteger/.*/}
-			fi
-			local oIFS="$IFS"
-			local IFS=":"
-			local timecodeSegments=($inputInteger)
-			local IFS="$oIFS"
-			local scale=1
-			local segmentIndex
-			local output=0
-
-			local i
-			for (( i=0; i < ${#timecodeSegments[@]}; i++ )); do
-				local segmentIndex=$(( ${#timecodeSegments[@]} - 1 - i ))
-				scale=$(( scale * ${TIMECODE_COMPOUND_SCALE[$i]} ))
-				# whisper "scale $i) $scale; FORMULA: $output + ${timecodeSegments[$segmentIndex]} * $scale" # XXX
-				output=$(echo "$output + ${timecodeSegments[$segmentIndex]} * $scale" | bc)
-			done
-			[[ -n $decimal ]] && output+="${decimal}"
-		else
-			output="$input"
-		fi
-
-		# whisper "secondsFromTimecode ($input)>'$output'" # XXX
-
-		echo -n $output
-	}
-
-	timecodeFromSeconds() {
-    local status=0
-		local input="$1"
-		if [[ $input =~ ^[0-9.]+$ ]]; then
-			local remainder=$input
-			local decimal=
-			if [[ $input =~ \. ]]; then
-				local decimal=${remainder/*./}
-				[[ -n $decimal ]] && decimal=".${decimal}"
-				remainder=${remainder/.*/}
-			fi
-			local timecodeSegments=()
-			local newTimecodeSegments
-			local newSegment
-			local i
-			for (( i=0; i < ${#TIMECODE_COMPOUND_SCALE[@]}; i++ )); do # start from minutes
-				let nextI=$(( i + 1 ))
-				if [[ $nextI -lt ${#TIMECODE_COMPOUND_SCALE[@]} ]]; then
-					newSegment=$(( remainder % ${TIMECODE_COMPOUND_SCALE[$nextI]} ))
-					remainder=$(( remainder / ${TIMECODE_COMPOUND_SCALE[$nextI]} )) # int
-				else
-					newSegment=$remainder
-					remainder=0
-				fi
-				if [[ $newSegment -gt 0 || $remainder -gt 0 ]]; then
-					newTimecodeSegments=($(pad 2 '0' "$newSegment"))
-					[[ ${#timecodeSegments[@]} -gt 0 ]] && newTimecodeSegments+=(${timecodeSegments[@]}) # i.e. prepend new
-					timecodeSegments=(${newTimecodeSegments[@]})
-				else
-					break
-				fi
-			done
-			
-			if [[ ${#timecodeSegments[@]} -gt 0 ]]; then
-				local oIFS="$IFS"
-				local IFS=":"
-				local output="${timecodeSegments[*]}${decimal}"
-				local IFS="$oIFS"
-			else
-				output=0
-			fi
-		else
-			output="$input"
-      status=2
-		fi
-
-		# whisper "timecodeFromSeconds ($input)>'$output'" # XXX
-
-		echo -n $output
-    return $status
-	}
-
-	normalizeTimeCode() {
-    local normalized status=0
-		normalized="$(timecodeFromSeconds "$(secondsFromTimecode "$1")")"
-    status=$?
-		# whisper "normalized '$1' to '$normalized'" # XXX
-		echo -n "$normalized"
-    return $status
-	}
-
-	doTimecodesDiffer() {
-		a="$(normalizeTimeCode $1)"
-		b="$(normalizeTimeCode $2)"
-		# whisper "doTimecodesDiffer ($1)>'$a' ($2)>'$b'" # XXX
-		[[ $a != $b ]]
-	}
-
-	describeTimecode() {
-		local input="$1"
-		local output="$input"
-
-		local oIFS="$IFS"
-		local IFS=$':'
-		local timecodeSegments=($input)
-		IFS="$oIFS"
-
-		local lastSegmentIndex=$(( ${#timecodeSegments[@]} - 1 ))
-		output+=" ${TIMECODE_UNITS[$lastSegmentIndex]}"
-		if [[ ${timecodeSegments[$lastSegmentIndex]} != '01' ]]; then # @( hack ) comparison against padded string
-			output+="s"
-		fi
-
-		# whisper "input: '$input', output: '$output'" # XXX
-
-		echo -n "$output"
-	}
+  }
 }
 
 ## EXECUTION:
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]
+then
+  >&2 echo "[EXECUTING timecode, not just sourcing.]" # XXX
+  timecode "$@"
+fi
