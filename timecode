@@ -1,10 +1,10 @@
 #!/bin/bash
 ## CONSTANTS:
 {
-  export TCSCRIPT_VERSION=0.2.1
+  export TCSCRIPT_VERSION=0.2.2
   export TCSCRIPT_DATE_MODIFIED=2025-10-24
   export TCSCRIPT_NAME="$(basename "$0")"
-  export TCSCRIPT_ATTRIBUTION="${TCSCRIPT_NAME} version ${TCSCRIPT_VERSION} ${TCSCRIPT_DATE_MODIFIED} by C. Lovejoy"
+  export TCSCRIPT_ATTRIBUTION="${TCSCRIPT_NAME} version ${TCSCRIPT_VERSION} ${TCSCRIPT_DATE_MODIFIED}"
 
   E_ARGS=1
 
@@ -26,10 +26,6 @@
 
 ## FUNCTIONS:
 {
-  feedback() {
-    echo "$@" >&2
-  }
-
   pad() {
     local length=$1
     local padChar="$2"
@@ -62,7 +58,6 @@
       for (( i=0; i < ${#timecodeSegments[@]}; i++ )); do
         local segmentIndex=$(( ${#timecodeSegments[@]} - 1 - i ))
         scale=$(( scale * ${TIMECODE_COMPOUND_SCALE[$i]} ))
-        # feedback "scale $i) $scale; FORMULA: $output + ${timecodeSegments[$segmentIndex]} * $scale" # XXX
         output=$(echo "$output + ${timecodeSegments[$segmentIndex]} * $scale" | bc)
       done
       [[ -n $decimal ]] && output+="${decimal}"
@@ -70,7 +65,6 @@
       output="$input"
     fi
 
-    # feedback "secondsFromTimecode ($input)>'$output'" # XXX
 
     echo -n $output
   }
@@ -122,9 +116,6 @@
       output="$input"
       status=2
     fi
-
-    # feedback "timecodeFromSeconds ($input)>'$output'" # XXX
-
     echo -n $output
     return $status
   }
@@ -133,7 +124,6 @@
     local normalized status=0
     normalized="$(timecodeFromSeconds "$(secondsFromTimecode "$1")")"
     status=$?
-    # feedback "normalized '$1' to '$normalized'" # XXX
     echo -n "$normalized"
     return $status
   }
@@ -141,7 +131,6 @@
   doTimecodesDiffer() {
     a="$(normalizeTimeCode $1)"
     b="$(normalizeTimeCode $2)"
-    # feedback "doTimecodesDiffer ($1)>'$a' ($2)>'$b'" # XXX
     [[ $a != $b ]]
   }
 
@@ -160,8 +149,6 @@
       output+="s"
     fi
 
-    # feedback "input: '$input', output: '$output'" # XXX
-
     echo -n "$output"
   }
 }
@@ -178,8 +165,8 @@
       case $1 in
         -d|--decode) shouldDecode=true;;
         -u|u) showUnits=true;;
-        -h|--help|h) timecode_showHelp; exit;;
-        -V|--version) echo "$TCSCRIPT_ATTRIBUTION"; exit;;
+        -h|--help|h) timecode_showHelp; return;;
+        -V|--version) echo "$TCSCRIPT_ATTRIBUTION"; return;;
         *) duration="$1";;
       esac
       shift
@@ -187,7 +174,7 @@
 
     if [[ -z $duration ]]; then
       echo "Please pass one duration argument."
-      exit 1
+      return 1
     fi
 
     if [[ $shouldDecode == true ]]
@@ -222,6 +209,5 @@
 ## EXECUTION:
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]
 then
-  >&2 echo "[EXECUTING timecode, not just sourcing.]" # XXX
   timecode "$@"
 fi
