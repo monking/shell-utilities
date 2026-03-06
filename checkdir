@@ -46,7 +46,7 @@ SCRIPT_DESCRIPTION_LINES=(
   "If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed in the current directory, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
-  "0.2.0 @1772828166  Implement SHA256E.  b2sum=f661db26&size=6814" #nosum
+  "0.2.0 @1772840859  Implement SHA256E.  b2sum=bae49c91&size=6804" #nosum
   "0.1.1 @1735249838  Add 'ALG' to '-a' in help.   b2sum=52aa3a44&size=5484" #nosum
   "0.1.0 @1720381791  Show progress (percent an count).   b2sum=14b0e4c8&size=5484" #nosum
   "0.0.7 @1670970409  Support for Bash 3.2.x; require tr instead of perl.   sum:db71df2c#a=b2,l=32;size:4959" #nosum
@@ -173,9 +173,9 @@ checksumSHA256E() {
       status='FAILED open or read';
     else
       basename="$(basename "$path")"
-      size="$(du -L -b "$path" | awk '{ print $1 }')"
-      sum="$(sha256sum "$path" | awk '{ print $1 }')"
-      baseKey="SHA256E-s${size}--${sum}"
+      size=($(du -L -b "$path")) || continue;
+      sum=($(sha256sum "$path")) || continue;
+      baseKey="SHA256E-s${size[0]}--${sum[0]}"
       if [[ ${key:0:${#baseKey}} == $baseKey ]]; then
         status=OK;
       else

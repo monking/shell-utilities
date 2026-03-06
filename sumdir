@@ -17,7 +17,7 @@
   SCRIPT_EXAMPLES+=("sumdir -r -exec " "Output an extra column after filename with the result of … (see \`find -exec\`)")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
   SCRIPT_VERSIONS=(
-    "0.2.0  @1772828176  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=6f2eb770&size=16442" #nosum
+    "0.2.0  @1772841283  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=89819e44&size=16447" #nosum
     "0.1.8  @1760374334  Refactor execution into main function. Repair & extend documentation.  b2sum=4f000838&size=15179" #nosum
     "0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
     "0.1.6  @1699561902  Template can contain output path. More documentation.  b2sum=6ef9ea3c&size=13289" #nosum
@@ -356,7 +356,7 @@
     algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
   }
   initializeJobExecutor() {
-    if command -v parallel &>/dev/null; then
+    if false && command -v parallel &>/dev/null; then # FIXME
       jobExecutor=(parallel -0 --bar); return 0; fi;
     if command -v xargs &>/dev/null; then
       jobExecutor=(xargsNulWrapper); return 0; fi;
@@ -369,7 +369,7 @@
       bashCommandQuoted+=("$(printf %q "$1")");
       shift;
     done
-    xargs -0 -i bash -c "${bashCommandQuoted[*]} {}";
+    xargs -0 -i bash -c "${bashCommandQuoted[*]}" {};
   }
   sumSHA256E() {
     local path basename size sum ext maxExtlen=10
@@ -381,15 +381,15 @@
       path="$1"
       shift
       basename="$(basename "$path")"
-      size="$(du -L -b "$path" | awk '{ print $1 }')"
-      sum="$(sha256sum "$path" | awk '{ print $1 }')"
+      size=($(du -L -b "$path")) || continue
+      sum=($(sha256sum "$path")) || continue
       ext="${path##*.}"
       if [[ $ext == $path || $ext == $basename || ${#ext} -gt $maxExtlen ]]; then
         ext=''
       else
         ext=".${ext}"
       fi
-      echo "SHA256E-s${size}--${sum}${ext}  ${path}"
+      echo "SHA256E-s${size[0]}--${sum[0]}${ext}  ${path}"
     done
   }
   export -f sumSHA256E
