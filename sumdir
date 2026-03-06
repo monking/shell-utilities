@@ -17,7 +17,7 @@
   SCRIPT_EXAMPLES+=("sumdir -r -exec " "Output an extra column after filename with the result of … (see \`find -exec\`)")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
   SCRIPT_VERSIONS=(
-    "0.2.0  @1772827209  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=26ae697f&size=16415" #nosum
+    "0.2.0  @1772828176  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=6f2eb770&size=16442" #nosum
     "0.1.8  @1760374334  Refactor execution into main function. Repair & extend documentation.  b2sum=4f000838&size=15179" #nosum
     "0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
     "0.1.6  @1699561902  Template can contain output path. More documentation.  b2sum=6ef9ea3c&size=13289" #nosum
@@ -49,7 +49,7 @@
       "    Show this help"
       ""
       "-a CMD"
-      "    Hashing algorithm to use. Currently supported: 'sha256', 'b2'. env: SUMDIR_ALGORITHM."
+      "    Hashing algorithm to use. Currently supported: 'sha256', 'b2', 'sha256e' (alias 'annex'). env: SUMDIR_ALGORITHM."
       ""
       "-r                "
       "    Recurse into directory. env: SUMDIR_SHOULD_RECURSE"
