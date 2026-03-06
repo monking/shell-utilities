@@ -17,6 +17,7 @@
   SCRIPT_EXAMPLES+=("sumdir -r -exec " "Output an extra column after filename with the result of … (see \`find -exec\`)")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
   SCRIPT_VERSIONS=(
+    "0.2.0  @1772822542  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=4da8a9fc&size=16197" #nosum
     "0.1.8  @1760374334  Refactor execution into main function. Repair & extend documentation.  b2sum=4f000838&size=15179" #nosum
     "0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
     "0.1.6  @1699561902  Template can contain output path. More documentation.  b2sum=6ef9ea3c&size=13289" #nosum
@@ -145,8 +146,10 @@
       let 'exampleIndex++';
     done
   }
+}
 
-  ## APPLICATION:
+## APPLICATION:
+{
   main() {
     local inputDirectories=();
 
@@ -250,7 +253,7 @@
       {
         echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${CALLED_AS_WITH_ARGS}\`)";
         echo "# Same as:  ${sumCommand[*]} FILENAMES";
-        echo "# To check file integrity, run:  ${checkCommand[*]} -c ${outputFilePath}";
+        echo "# To check file integrity, run:  ${checkCommand[*]} ${outputFilePath}";
         local dirPath;
         if [[ $opt_should_include_location_in_output == true ]]; then
           dirPath="${PWD}"
@@ -318,23 +321,26 @@
     jobExecutor=();
     algoUpper='';
     case "$(echo -n "$opt_algorithm" | toLowerCase)" in
-      sha*) opt_algorithm=sha256;
-        sumCommand=(sha256sum);
-        if ! command -v ${sumCommand[0]} &>/dev/null; then
-          if command -v shasum &>/dev/null; then
-            sumCommand=(shasum -a 256);
-          else
-            die "Missing checksum software: sha256sum or shasum.";
-          fi
+      sha256e|*annex) opt_algorithm=sha256e;
+        if ! command -v sha256sum &>/dev/null; then
+          die "Missing checksum software: sha256sum or shasum.";
         fi
-        checkCommand=("${sumCommand[@]}");
+        sumCommand=(sumSHA256E);
+        checkCommand=(checkdir);
+        ;;
+      sha*) opt_algorithm=sha256;
+        if ! command -v sha256sum &>/dev/null; then
+          die "Missing checksum software: sha256sum or shasum.";
+        fi
+        sumCommand=(sha256sum);
+        checkCommand=("${sumCommand[@]}" -c);
         if [[ ${#opt_list_sha_opts[@]} -gt 0 ]]; then
           sumCommand+=("${opt_list_sha_opts[@]}");
         fi
         ;;
       b2*|blake*) opt_algorithm=b2;
         sumCommand=(b2sum);
-        checkCommand=("${sumCommand[@]}");
+        checkCommand=("${sumCommand[@]}" -c);
         if [[ ${#opt_list_b2_opts[@]} -gt 0 ]]; then
           sumCommand+=("${opt_list_b2_opts[@]}");
         fi
@@ -356,6 +362,28 @@
       jobExecutor=(xargs -0); return 0; fi;
     die "Missing parallel and xargs.";
   }
+  sumSHA256E() {
+    local path basename size sum ext maxExtlen=10
+    while [[ $# -gt 0 ]]; do
+      if [[ $1 == '--' ]]; then
+        shift;
+        continue;
+      fi
+      path="$1"
+      shift
+      basename="$(basename "$path")"
+      size="$(du -L -b "$path" | awk '{ print $1 }')"
+      sum="$(sha256sum "$path" | awk '{ print $1 }')"
+      ext="${path##*.}"
+      if [[ $ext == $path || $ext == $basename || ${#ext} -gt $maxExtlen ]] then
+        ext=''
+      else
+        ext=".${ext}"
+      fi
+      echo "SHA256E-s${size}--${sum}${ext}  ${path}"
+    done
+  }
+  export -f sumSHA256E
 }
 
 ## PLUMBING:
@@ -410,6 +438,10 @@
     done
     fullPath "${linkPath}";
   }
+  if ! command -v sha256sum &>/dev/null && command -v shasum &>/dev/null; then
+    sha256sum() { shasum -a 256 "$@"; }
+    export -f sha256sum;
+  fi
 }
 
 ## CONFIGURATION:
