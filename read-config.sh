@@ -158,7 +158,7 @@ read-config()
 
 help-read-config()
 {
-  echo "SUMMARY: Create associative arrays from config input from STDIN or FILE."
+  echo "SUMMARY: Read config text into shell variables."
   echo "USAGE: read-config [-c,--context=CONTEXT…] [-n,--name=NAME] [-f FILE] [-v…] [-h]"
   echo "BEHAVIOR, OPTIONS:"
   echo "  If no NAME is specified, it defaults to 'config'."

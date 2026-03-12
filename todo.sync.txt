@@ -1,0 +1,9 @@
+(B) 2026-03-09  A better name than "sync". But something I'll remember. Perhaps 'offload'.  uuid:8b6c32ff-ccef-4e04-b1cd-2bcea7ea8486 | I do like .sync.conf as a filename, as opposed to .offload.conf… but that's not so bad either (CL 2026-03-11).
+(B) 2026-03-11  +decide What to do with nested configs? Should that be detected, and then maybe run the deeper one first? Or exclude the inner one, as git does by default?  uuid:7f4c5fee-d04e-4422-969b-b63620e8a2bd
+(C) 2026-03-01  Multiple destinations? Perhaps accept .sync*.conf files, allowing multiple definitions?  uuid:afddbe9c-6e9b-4428-9869-9fd67948d623
+(C) 2026-03-11  Take bare argument PATH… (multiple allowed), instead of single -d PATH; find config files into array, use that array for executing commands, rather than find -exec; abstract into functions.  complexity:3 uuid:3c66dd13-e0bb-4884-b67b-7fdf6e7318b6
+(C) 2026-03-12  +decide Should I add a 'method' config key? Values 'rsync' (default), 'git-annex' (implies 'move', or 'copy' if 'keepcopy' is true).  uuid:11b7a3de-391f-49f6-a7ab-de6ece6f1f42
+(C) 2026-03-12  Portable canonicalize path; shell-utilities/canon, after .
+(D) 2026-03-01  OPTION to copy back process result here? WORKAROUND: Put it in `postprocess`.  uuid:8539624d-4d87-48fa-b9e0-a4e11e9839ed
+x 2026-03-01 2026-02-26  +WONT Currently, postprocess is passed 1 argument: the destination(+subdir) directory. As such, the postprocess command needs to weed out previous result files, making some assumptions about naming conventions. Wouldn't it be better to get a list of files? (CL 2026-02-27)  | By providing destination only, the postprocess script is capable of cleaning up after an incomplete run. One may need to use `find` within that folder to make it work.  uuid:1ddb8beb-ef95-4678-bbdc-ceef9c5d9212
+x 2026-03-01 2026-02-26  +WONT Destination host? | Not necessary, since I'm using rsync, it can be part of the destination as HOST:PATH, right? uuid:c62b87db-517c-4a35-80d3-5799f9fa0509
