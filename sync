@@ -1,7 +1,8 @@
 #!/bin/bash
-SCRIPT_VERSION='0.4.4 2026-03-12'
+SCRIPT_VERSION='0.6.0 2026-03-13'
 SCRIPT_UUID='60dffac9-3444-41bb-bdf6-c9c63cdee89d'
-SYNC_CONF_FILENAME='.sync.conf'
+#SYNC_CONF_FILENAME='.sync.conf'
+SYNC_CONF_PATTERN='.sync*.conf'
 SCRIPT_PATH="$0"
 [[ -L "$SCRIPT_PATH" ]] && SCRIPT_PATH="$(readlink --canonicalize "$SCRIPT_PATH")" # Allow linking, but find original for dependencies and tasks. FIXME: Assuming GNU readlink.
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
@@ -21,22 +22,26 @@ loglevel() { [[ ${opt[VERBOSE]} -ge $1 ]]; }
 feedback() { loglevel $1 || return; shift; >&2 echo "$@"; }
 showHelp()
 {
-  echo "SYNOPSIS: Copies files from wherever a .sync.conf file is found."
+  echo "SYNOPSIS: Copies files from wherever a ${SYNC_CONF_PATTERN} file is found."
   echo
-  echo "USAGE: sync [-h|--help] [-d PATH] [-n|--dry-run] [-y|--no-prompt] [-v[v…]|--verbose|-q|--quiet]"
+  echo "USAGE: sync [-h|--help] [-n|--dry-run] [-y|--no-prompt] [-v[v…]|--verbose|-q|--quiet] [PATH]"
   echo
   echo "CONFIG (see shell-utilities/read-config.sh):"
   echo "  destination=PATH"
   echo "  subdir=DATEFORMAT"
-  echo "  exclude=PATTERN or ('PATTERN'…)"
+  echo "  exclude=PATTERN or ('PATTERN'…) # applies before include (*regardless of CONFIG line order)"
+  echo "  include=PATTERN or ('PATTERN'…) # applies after exclude (^*)"
   echo "  keepcopy=true|false"
   echo "  postprocess=COMMAND # where \$1 is the destination (sub)directory. Runs after all sync operations."
-  echo "  [HOSTNAME] groups"
+  echo "  [HOSTNAME] # groups"
+  echo
+  echo "NOTE: Only one value is assigned per key in the CONFIG. Multiples overwrite earlier values."
+  echo " Some keys (include, exclude) are evaluated to support arrays, like key=('a' 'b')."
   echo
   echo "OPTIONS:"
+  echo "  PATH  Path to directory to search for ${SYNC_CONF_PATTERN} files. Defaults to \$PWD."
   echo "  -h,--help  Show this help."
-  echo "  -d PATH  Path to directory to search for .sync.conf files. Defaults to \$PWD."
-  echo "  -n,--dry-run  Make no changes, move no files. Find .sync.conf files, and print commands. Implies -y."
+  echo "  -n,--dry-run  Make no changes, move no files. Find ${SYNC_CONF_PATTERN} files, and print commands. Implies -y."
   echo "  -y,--no-prompt  Begin syncing without prompting the user first."
   echo "  -v,--verbose  Show more info. Can be used multiple times."
   echo "  -q,--quiet  Suppress most output."
@@ -70,15 +75,18 @@ do
     --verbose)
       let opt[VERBOSE]++
       ;;
-    -d)
-      opt[BASE]="$2"
-      shift
-      ;;
     -y|--no-prompt)
       opt[ASSUMEYES]=1
       ;;
     -q|--quiet)
       opt[VERBOSE]=-1
+      ;;
+    -d) # sunset 2026-03-13/2026-06
+      opt[BASE]="$2"
+      shift
+      ;;
+    *)
+      opt[BASE]="$1"
       ;;
   esac
   shift
@@ -100,7 +108,7 @@ then
 fi
 
 baseFindArgs=()
-baseFindArgs+=("${opt[BASE]}" -name "$SYNC_CONF_FILENAME")
+baseFindArgs+=("${opt[BASE]}" -name "$SYNC_CONF_PATTERN")
 feedback 0 "Finding sync config files:"
 feedback 2 "# [${SCRIPT_NAME}] $ find ${baseFindArgs[*]} -print0"
 configPaths=()
@@ -143,8 +151,29 @@ syncCommand+='destination="${destination%%/}"; '
 syncCommand+='if [[ -z $destination ]]; then >&2 echo "Empty destination. Skipping file transfer."; exit; fi; '
 ! isdry && syncCommand+='mkdir -p "$destination"; '
 syncCommand+='rsyncArgs=(); '
+isdry && syncCommand+='rsyncArgs+=(--dry-run); '
+loglevel 1 && syncCommand+='rsyncArgs+=(-v); '
+loglevel 2 && syncCommand+='rsyncArgs+=(--debug=FILTER); '
+#loglevel 0 && syncCommand+='rsyncArgs+=(--info=progress2); '
 syncCommand+='rsyncArgs+=(-r); '
-syncCommand+="rsyncArgs+=(--exclude=\"${SYNC_CONF_FILENAME}\"); "
+syncCommand+="rsyncArgs+=(--exclude=\"${SYNC_CONF_PATTERN}\"); "
+syncCommand+='if [[ -n ${config[include]} ]]; then '
+  syncCommand+='includePatterns=(); '
+  syncCommand+="if [[ \${config[include]} =~ [\\\"\\'()] ]]; "
+  syncCommand+='then '
+    syncCommand+='eval "includePatterns+=${config[include]}"; '
+  syncCommand+='else '
+    syncCommand+='includePatterns+=("${config[include]}"); '
+  syncCommand+='fi; '
+  loglevel 2 && syncCommand+='>&2 echo "# [${SCRIPT_NAME}] includePatterns(${#includePatterns[@]}): ${includePatterns[*]}"; '
+  syncCommand+='for pattern in "${includePatterns[@]}"; '
+  syncCommand+='do '
+    syncCommand+='rsyncArgs+=(--include="${pattern}"); '
+  syncCommand+='done; '
+  #syncCommand+='if [[ ${#includePatterns[@]} -gt 0 ]]; then '
+  #  syncCommand+='rsyncArgs+=(--exclude="*"); '
+  #syncCommand+='fi '
+syncCommand+='fi; '
 syncCommand+='if [[ -n ${config[exclude]} ]]; then '
   syncCommand+='excludePatterns=(); '
   syncCommand+="if [[ \${config[exclude]} =~ [\\\"\\'()] ]]; "
@@ -162,7 +191,7 @@ syncCommand+='fi; '
 syncCommand+='[[ ${config[keepcopy]} != true ]] && rsyncArgs+=(--remove-source-files); '
 syncCommand+='rsyncArgs+=("$PWD/" "$destination/"); '
 loglevel 1 && syncCommand+='>&2 echo "# [${SCRIPT_NAME}] \$ rsync ${rsyncArgs[*]}"; '; 
-! isdry && syncCommand+='rsync "${rsyncArgs[@]}"; '
+syncCommand+='rsync "${rsyncArgs[@]}"; '
 
 feedback 0
 feedback 0 "# [${SCRIPT_NAME}] PHASE: sync"

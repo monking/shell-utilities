@@ -183,6 +183,7 @@ help-read-config()
   echo "  * Indentation is ignored everywhere."
   echo "  * Lines ending with '\\' backslashes carry over VALUE definitions into the next line."
   echo "  * A line beginning with '#' is a comment; the '#' may be indented."
+  echo "  * A '#' after a non-whitespace character is part of the value. Comments cannot be on the same line as a value."
   echo "  * Lines not understood by the format are also considered comments."
   echo
   echo "CONFIG EXAMPLE:"

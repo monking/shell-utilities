@@ -1,5 +1,12 @@
 #!/bin/bash
 
+case $1 in
+  -h|--help)
+    echo "SUMMARY: Search a git repository for tasks"
+    echo "USAGE: git-todo [COMPARE]";
+    echo "COMPARE defaults to origin/develop, or similar git upstream.";
+    exit;;
+esac
 # --no-renames: does this cause larger diffs, because a rename is treated more like a mode change, not a code change?
 diff_reference=$1
 if [[ -z $diff_reference ]]; then
