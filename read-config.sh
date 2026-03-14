@@ -40,7 +40,20 @@ read-config()
     shift
   done
 
-  [[ $shouldUnsetFirst == true ]] && unset $configNameBase
+  if [[ $shouldUnsetFirst == true ]]
+  then
+    local existingHashes
+    eval "existingHashes=(\${_${configNameBase}_hashes[@]})"
+    if [[ ${#existingHashes[@]} -gt 0 ]]
+    then
+      for hashName in "${existingHashes[@]}"
+      do
+        unset $hashName
+      done
+    else
+      unset $configNameBase
+    fi
+  fi
   declare -g -A $configNameBase
   declare -a configHashes=($configNameBase)
   declare -a configContexts=()
@@ -212,5 +225,5 @@ help-read-config()
   echo
   echo "NOTE: Definitions won't reach the call context if read-config is in a subshell, such as \`echo key=value | read-config\`. You might do \`read-config <<<\"\$(echo key=value)\"\` instead."
   echo
-  echo "(read-config version 0.6.3 2026-03-12)"
+  echo "(read-config version 0.6.4 2026-03-14)"
 }

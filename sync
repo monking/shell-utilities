@@ -130,6 +130,8 @@ then
   exit
 fi
 
+# TODO Parse config before prompting, not only ^ displaying config text.  todo.sync.txt#8b304e92
+
 if [[ ${opt[ASSUMEYES]} -le 0 ]]
 then
   read -p "Proceed to sync these directories? (Y/n): " \
