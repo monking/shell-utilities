@@ -1,5 +1,5 @@
 #!/bin/bash
-SCRIPT_VERSION='0.6.0 2026-03-13'
+SCRIPT_VERSION='0.6.1 2026-03-19'
 SCRIPT_UUID='60dffac9-3444-41bb-bdf6-c9c63cdee89d'
 #SYNC_CONF_FILENAME='.sync.conf'
 SYNC_CONF_PATTERN='.sync*.conf'
@@ -141,10 +141,13 @@ fi
 
 feedback 0 -E "# [${SCRIPT_NAME}] BEGIN $(date --iso-8601=seconds)"
 
+export SCRIPT_NAME
+export PATH_READ_CONF_SOURCE
+
 syncCommand=''
-syncCommand+="SCRIPT_NAME=\"${SCRIPT_NAME}\"; "
+#syncCommand+="SCRIPT_NAME=\"${SCRIPT_NAME}\"; "
 loglevel 2 && syncCommand+='declare -p PWD; '
-syncCommand+=". \"${PATH_READ_CONF_SOURCE}\" || exit; "
+syncCommand+=". \"\$PATH_READ_CONF_SOURCE\" || exit; "
 syncCommand+='read-config '
   loglevel 2 && syncCommand+='-v '
   syncCommand+='-u -c "$HOSTNAME" -f {}; '
@@ -207,9 +210,9 @@ syncFindArgs+=(-execdir bash -c "$syncCommand" \;) # NOTE sync will be no-op if 
 find "${syncFindArgs[@]}"
 
 
-postprocessCommand+="SCRIPT_NAME=\"${SCRIPT_NAME}\"; "
+#postprocessCommand+="SCRIPT_NAME=\"${SCRIPT_NAME}\"; "
 loglevel 2 && postprocessCommand+='declare -p PWD; '
-postprocessCommand+=". \"${PATH_READ_CONF_SOURCE}\" || exit; "
+postprocessCommand+=". \"\$PATH_READ_CONF_SOURCE\" || exit; "
 postprocessCommand+='read-config '
   loglevel 2 && postprocessCommand+='-v '
   postprocessCommand+='-u -c "$HOSTNAME" -f {}; '
