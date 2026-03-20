@@ -1,5 +1,5 @@
 #!/bin/bash
-SCRIPT_VERSION='0.6.1 2026-03-19'
+SCRIPT_VERSION='0.6.2 2026-03-20'
 SCRIPT_UUID='60dffac9-3444-41bb-bdf6-c9c63cdee89d'
 #SYNC_CONF_FILENAME='.sync.conf'
 SYNC_CONF_PATTERN='.sync*.conf'
@@ -151,7 +151,8 @@ syncCommand+=". \"\$PATH_READ_CONF_SOURCE\" || exit; "
 syncCommand+='read-config '
   loglevel 2 && syncCommand+='-v '
   syncCommand+='-u -c "$HOSTNAME" -f {}; '
-syncCommand+='destination="${config[destination]}/$(date "+${config[subdir]}")"; '
+syncCommand+='destination="${config[destination]}"; '
+syncCommand+='[[ -n ${config[subdir]} ]] && destination+="/$(date "+${config[subdir]}")"; '
 syncCommand+='destination="${destination%%/}"; '
 syncCommand+='if [[ -z $destination ]]; then >&2 echo "Empty destination. Skipping file transfer."; exit; fi; '
 ! isdry && syncCommand+='mkdir -p "$destination"; '
