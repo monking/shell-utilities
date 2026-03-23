@@ -1,7 +1,7 @@
+(A) 2026-03-14  Move sync script out of `find -exec` string, into functions. Read config (unset first) into function context, to preview before prompting to proceed.  uuid:8b304e92-8b68-42d4-bacf-b5cfaf1c11f6  BUMP:[2026-03-23]
 (B) 2026-03-11  +decide What to do with nested configs? Should that be detected, and then maybe run the deeper one first? Or exclude the inner one, as git does by default?  uuid:7f4c5fee-d04e-4422-969b-b63620e8a2bd
-(B) 2026-03-14  Move sync script out of `find -exec` string, into functions. Read config (unset first) into function context, to preview before prompting to proceed.  uuid:8b304e92-8b68-42d4-bacf-b5cfaf1c11f6
+(B) 2026-03-11  Take multiple PATH…; find config files into array, use that array for executing commands, rather than find -exec; abstract into functions (#8b304e92).  complexity:3 uuid:5a4034ab-3fb1-4bfa-bfc1-7b9ef4a6a77b
 (B) 2026-03-20  Use `mv` instead of `rsync` as appropriate, to enable moving files over MTP (e.g. mobile by USB).  uuid:a2a69a46-9b09-48f1-954c-f3ce3bf6afa3 related:11b7a3de-391f-49f6-a7ab-de6ece6f1f42
-(C) 2026-03-11  Take multiple PATH…; find config files into array, use that array for executing commands, rather than find -exec; abstract into functions (#8b304e92).  complexity:3 uuid:5a4034ab-3fb1-4bfa-bfc1-7b9ef4a6a77b
 (C) 2026-03-12  +decide Should I add a 'method' config key? Values 'rsync' (default), 'git-annex' (implies 'move', or 'copy' if 'keepcopy' is true).  uuid:11b7a3de-391f-49f6-a7ab-de6ece6f1f42
 (C) 2026-03-12  Portable canonicalize path; shell-utilities/canon, after .
 (D) 2026-03-01  OPTION to copy back process result here? WORKAROUND: Put it in `postprocess`.  uuid:8539624d-4d87-48fa-b9e0-a4e11e9839ed

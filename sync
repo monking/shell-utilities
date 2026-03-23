@@ -1,5 +1,5 @@
 #!/bin/bash
-SCRIPT_VERSION='0.6.2 2026-03-20'
+SCRIPT_VERSION='0.6.3 2026-03-20'
 SCRIPT_UUID='60dffac9-3444-41bb-bdf6-c9c63cdee89d'
 #SYNC_CONF_FILENAME='.sync.conf'
 SYNC_CONF_PATTERN='.sync*.conf'
@@ -27,12 +27,12 @@ showHelp()
   echo "USAGE: sync [-h|--help] [-n|--dry-run] [-y|--no-prompt] [-v[v…]|--verbose|-q|--quiet] [PATH]"
   echo
   echo "CONFIG (see shell-utilities/read-config.sh):"
-  echo "  destination=PATH"
-  echo "  subdir=DATEFORMAT"
-  echo "  exclude=PATTERN or ('PATTERN'…) # applies before include (*regardless of CONFIG line order)"
-  echo "  include=PATTERN or ('PATTERN'…) # applies after exclude (^*)"
+  echo "  destination=PATH # Use '.' for moving within source directory"
+  echo "  subdir=DATEFORMAT # Ignored if destination is empty"
+  echo "  exclude=PATTERN or ('PATTERN'…) # Applies before include (*regardless of CONFIG line order)"
+  echo "  include=PATTERN or ('PATTERN'…) # Applies after exclude (^*)"
   echo "  keepcopy=true|false"
-  echo "  postprocess=COMMAND # where \$1 is the destination (sub)directory. Runs after all sync operations."
+  echo "  postprocess=COMMAND # Where \$1 is the destination (sub)directory, or the source directory if no destination is defined. Runs after all sync operations."
   echo "  [HOSTNAME] # groups"
   echo
   echo "NOTE: Only one value is assigned per key in the CONFIG. Multiples overwrite earlier values."
@@ -152,7 +152,7 @@ syncCommand+='read-config '
   loglevel 2 && syncCommand+='-v '
   syncCommand+='-u -c "$HOSTNAME" -f {}; '
 syncCommand+='destination="${config[destination]}"; '
-syncCommand+='[[ -n ${config[subdir]} ]] && destination+="/$(date "+${config[subdir]}")"; '
+syncCommand+='[[ -n ${config[subdir]} && -n $destination ]] && destination+="/$(date "+${config[subdir]}")"; '
 syncCommand+='destination="${destination%%/}"; '
 syncCommand+='if [[ -z $destination ]]; then >&2 echo "Empty destination. Skipping file transfer."; exit; fi; '
 ! isdry && syncCommand+='mkdir -p "$destination"; '
@@ -217,9 +217,10 @@ postprocessCommand+=". \"\$PATH_READ_CONF_SOURCE\" || exit; "
 postprocessCommand+='read-config '
   loglevel 2 && postprocessCommand+='-v '
   postprocessCommand+='-u -c "$HOSTNAME" -f {}; '
-postprocessCommand+='destination="${config[destination]}/$(date "+${config[subdir]}")"; '
+postprocessCommand+='destination="${config[destination]}"; '
+postprocessCommand+='[[ -n ${config[subdir]} && -n $destination ]] && destination+="/$(date "+${config[subdir]}")"; '
 postprocessCommand+='destination="${destination%%/}"; '
-postprocessCommand+='if [[ -z $destination ]]; then >&2 echo "Empty destination. Assuming PWD \"$PWD\"."; destination="$PWD"; fi; '
+postprocessCommand+='if [[ -z $destination ]]; then >&2 echo "Empty destination. Assuming source dir \"$PWD\"."; destination="$PWD"; fi; '
 postprocessCommand+='[[ -n ${config[postprocess]} ]] && { '
   postprocessCommand+='eval "postprocess() { ${config[postprocess]}'$'\n''}" && type postprocess '
     ! loglevel 1 && postprocessCommand+='&>/dev/null '
