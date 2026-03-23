@@ -17,6 +17,7 @@
   SCRIPT_EXAMPLES+=("sumdir -r -exec " "Output an extra column after filename with the result of … (see \`find -exec\`)")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
   SCRIPT_VERSIONS=(
+    "0.2.1a  @xxxxxxxxxx  WIP: Fix… everything?" #nosum
     "0.2.0  @1772841283  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=89819e44&size=16447" #nosum
     "0.1.8  @1760374334  Refactor execution into main function. Repair & extend documentation.  b2sum=4f000838&size=15179" #nosum
     "0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
@@ -166,6 +167,8 @@
         -l) opt_should_include_location_in_output=true;;
         -z|--tz) opt_timezone="$2"; shift;;
         -f|--dateformat) opt_date_format="$2"; shift;;
+        -vv) let opt_verbose+=2;;
+        -vvv) let opt_verbose+=3;;
         -v|--verbose) let opt_verbose++;;
         --verbose=*) opt_verbose=${1#*=};;
         --length) opt_list_b2_opts+=(--length $2); shift;;
@@ -173,12 +176,12 @@
         -X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
         --) shift; break;;
         --bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
-        --version) echo "${SCRIPT_VERSION_NICE} ($0)"; whisper 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
+        --version) echo "${SCRIPT_VERSION_NICE} ($0)"; feedback 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
         *) inputDirectories+=("$1");;
       esac
       shift;
     done
-    whisper 1 "(Verbose output level: ${opt_verbose})";
+    feedback 1 "(Verbose output level: ${opt_verbose})";
 
     initializeSumCommand;
     initializeJobExecutor;
@@ -200,7 +203,7 @@
       if pushd "$dir" &>/dev/null; then
         let dStackHeight++;
       else
-        yell "Unable to access directory '$dir'. Skipping.";
+        feedback 0 "Unable to access directory '$dir'. Skipping.";
         continue;
       fi
 
@@ -249,7 +252,7 @@
       fi
       findArgs+=(-print0);
 
-      whisper 1 "\$ find ${findArgs[*]}";
+      feedback 1 "\$ find ${findArgs[*]}";
       {
         echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${CALLED_AS_WITH_ARGS}\`)";
         echo "# Same as:  ${sumCommand[*]} FILENAMES";
@@ -275,7 +278,7 @@
           | sort -k2;
       } > "${outputFilePath}";
       local sumStatus=$?;
-      yell "Generated ${outputFilePath}";
+      feedback 0 "Generated ${outputFilePath}";
 
       if [[ $sumStatus != 0 ]]; then
         exit $sumStatus;
@@ -286,12 +289,12 @@
   removeFilesByTemplate() {
     local template="$1";
 
-    whisper 2 "Output filename template: ${template}";
+    feedback 2 "Output filename template: ${template}";
     local templateStar="${template//\{\}/*}";
     templateStar="${templateStar//%d/*}";
     templateStar="${templateStar//%a/$opt_algorithm}";
     templateStar="${templateStar//%A/${algoUpper}}";
-    whisper 2 "Pattern for files to remove: ${templateStar}";
+    feedback 2 "Pattern for files to remove: ${templateStar}";
     local oIFS="$IFS";
     local IFS='*';
     local templateParts=($templateStar);
@@ -304,11 +307,11 @@
     local removeCommand=trash;
     command -v "$removeCommand" &>/dev/null || removeCommand=rm;
 
-    whisper 1 "$ $removeCommand $templateStar";
+    feedback 1 "$ $removeCommand $templateStar";
 
     case ${#templateParts[@]} in
-      0) whisper 1 "No non-wildcard part of name template to glob by, for removing previous output sum files."; return 1;;
-      1) whisper 2 "No wildcards in template. Searching for literal name"; $removeCommand "${templateParts[0]}";;
+      0) feedback 1 "No non-wildcard part of name template to glob by, for removing previous output sum files."; return 1;;
+      1) feedback 2 "No wildcards in template. Searching for literal name"; $removeCommand "${templateParts[0]}";;
       2) $removeCommand "${templateParts[0]}"*"${templateParts[1]}";;
       3) $removeCommand "${templateParts[0]}"*"${templateParts[1]}"*"${templateParts[2]}";;
       4) $removeCommand "${templateParts[0]}"*"${templateParts[1]}"*"${templateParts[2]}"*"${templateParts[3]}";;
@@ -349,14 +352,14 @@
     esac
     sumCommand+=(--); # no more options, in case filenames/paths begin with `-`.
     if command -v "${sumCommand[0]}" &>/dev/null; then
-      whisper 1 "Using $(which "${sumCommand[0]}")";
+      feedback 1 "Using $(which "${sumCommand[0]}")";
     else
       die "Missing selected checksum software: ${sumCommand[0]}.";
     fi
     algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
   }
   initializeJobExecutor() {
-    if false && command -v parallel &>/dev/null; then # FIXME
+    if command -v parallel &>/dev/null; then
       jobExecutor=(parallel -0 --bar); return 0; fi;
     if command -v xargs &>/dev/null; then
       jobExecutor=(xargsNulWrapper); return 0; fi;
@@ -397,10 +400,9 @@
 
 ## PLUMBING:
 {
-  yell() { echo "$@" >&2; }
-  die() { yell "$@"; exit 111; }
+  die() { feedback 0 "$@"; exit 111; }
   must() { "$@" || die "cannot $*"; }
-  whisper() { local volume=$1; shift; [[ $opt_verbose -ge $volume ]] && yell "$@"; }
+  feedback() { [[ $opt_verbose -ge $1 ]] || return; shift; >&2 echo "$@"; }
   getValueIfDefined() {
     varName="$1";
     eval "[ -n \"\${${varName}+v}\" ] && echo -en \"\$${varName}\"";
@@ -503,23 +505,23 @@
         ## Get default.
         fromVarName="$(getDefaultOptName "$opt")";
         if ! newValue="$(getValueIfDefined "$fromVarName")"; then
-          whisper 2 "✗ Missing env and default values for '${opt}'";
+          feedback 2 "✗ Missing env and default values for '${opt}'";
           continue;
         fi
       fi
 
       if [[ $opt =~ ^opt_list_ ]]; then
         if getArrayFromColonList $opt "$newValue"; then
-          whisper 1 "✓ ${opt}: (${#listValue[@]})[${listValue[*]}] # from ${fromVarName}";
+          feedback 1 "✓ ${opt}: (${#listValue[@]})[${listValue[*]}] # from ${fromVarName}";
         else
-          yell "✗ Unable to parse colon-separated list from env var '${fromVarName}'.";
+          feedback 0 "✗ Unable to parse colon-separated list from env var '${fromVarName}'.";
         fi
       else
         eval "${opt}=\"\$newValue\"";
-        whisper 1 "✓ ${opt}: \"${newValue}\" # from ${fromVarName}";
+        feedback 1 "✓ ${opt}: \"${newValue}\" # from ${fromVarName}";
       fi
     done
-    [[ ${#missingEnv[@]} -gt 0 ]] && whisper 2 "✗ No env vars for options: ${missingEnv[*]}";
+    [[ ${#missingEnv[@]} -gt 0 ]] && feedback 2 "✗ No env vars for options: ${missingEnv[*]}";
   }
 }
 
