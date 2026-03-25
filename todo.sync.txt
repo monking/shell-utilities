@@ -4,6 +4,7 @@
 (B) 2026-03-20  Use `mv` instead of `rsync` as appropriate, to enable moving files over MTP (e.g. mobile by USB).  uuid:a2a69a46-9b09-48f1-954c-f3ce3bf6afa3 related:11b7a3de-391f-49f6-a7ab-de6ece6f1f42
 (C) 2026-03-12  +decide Should I add a 'method' config key? Values 'rsync' (default), 'git-annex' (implies 'move', or 'copy' if 'keepcopy' is true).  uuid:11b7a3de-391f-49f6-a7ab-de6ece6f1f42
 (C) 2026-03-12  Portable canonicalize path; shell-utilities/canon, after .
+(C) 2026-03-25  t:2026-06-01 Remove 'destination' as $1 arg to postprocess function.  uuid:626ed8d8-2cbd-42d1-8a65-4a430c04af2f
 (D) 2026-03-01  OPTION to copy back process result here? WORKAROUND: Put it in `postprocess`.  uuid:8539624d-4d87-48fa-b9e0-a4e11e9839ed
 x 2026-03-01 2026-02-26  +WONT Currently, postprocess is passed 1 argument: the destination(+subdir) directory. As such, the postprocess command needs to weed out previous result files, making some assumptions about naming conventions. Wouldn't it be better to get a list of files? (CL 2026-02-27)  | By providing destination only, the postprocess script is capable of cleaning up after an incomplete run. One may need to use `find` within that folder to make it work.  uuid:1ddb8beb-ef95-4678-bbdc-ceef9c5d9212
 x 2026-03-01 2026-02-26  +WONT Destination host? | Not necessary, since I'm using rsync, it can be part of the destination as HOST:PATH, right? uuid:c62b87db-517c-4a35-80d3-5799f9fa0509

@@ -1,5 +1,5 @@
 #!/bin/bash
-SCRIPT_VERSION='0.6.3 2026-03-20'
+SCRIPT_VERSION='0.6.4 2026-03-25'
 SCRIPT_UUID='60dffac9-3444-41bb-bdf6-c9c63cdee89d'
 #SYNC_CONF_FILENAME='.sync.conf'
 SYNC_CONF_PATTERN='.sync*.conf'
@@ -7,7 +7,7 @@ SCRIPT_PATH="$0"
 [[ -L "$SCRIPT_PATH" ]] && SCRIPT_PATH="$(readlink --canonicalize "$SCRIPT_PATH")" # Allow linking, but find original for dependencies and tasks. FIXME: Assuming GNU readlink.
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-PATH_READ_CONF_SOURCE="$SCRIPT_DIR/read-config.sh"
+PATH_SOURCE_READ_CONF="$SCRIPT_DIR/read-config.sh"
 oIFS="$IFS"
 shopt -s extglob
 declare -A opt
@@ -16,6 +16,9 @@ opt[BASE]="$PWD"
 opt[DRYRUN]=FALSE
 opt[SHOWHELP]=0
 opt[VERBOSE]=0
+[[ -z $HOSTNAME ]] && command -v hostname &>/dev/null && export HOSTNAME="$(hostname)"
+userContexts=()
+userContexts+=("host.$HOSTNAME")
 
 isdry() { [[ ${opt[DRYRUN]} == TRUE ]]; }
 loglevel() { [[ ${opt[VERBOSE]} -ge $1 ]]; }
@@ -24,7 +27,7 @@ showHelp()
 {
   echo "SYNOPSIS: Copies files from wherever a ${SYNC_CONF_PATTERN} file is found."
   echo
-  echo "USAGE: sync [-h|--help] [-n|--dry-run] [-y|--no-prompt] [-v[v…]|--verbose|-q|--quiet] [PATH]"
+  echo "USAGE: sync [-h|--help] [-n|--dry-run] [-y|--no-prompt] [-c CONTEXT] [-v[v…]|--verbose|-q|--quiet] [PATH]"
   echo
   echo "CONFIG (see shell-utilities/read-config.sh):"
   echo "  destination=PATH # Use '.' for moving within source directory"
@@ -32,14 +35,15 @@ showHelp()
   echo "  exclude=PATTERN or ('PATTERN'…) # Applies before include (*regardless of CONFIG line order)"
   echo "  include=PATTERN or ('PATTERN'…) # Applies after exclude (^*)"
   echo "  keepcopy=true|false"
-  echo "  postprocess=COMMAND # Where \$1 is the destination (sub)directory, or the source directory if no destination is defined. Runs after all sync operations."
-  echo "  [HOSTNAME] # groups"
+  echo "  postprocess=COMMAND # Run in the destination directory, or the source directory if no destination is defined. Runs after all sync operations."
+  echo "  [CONTEXT] # per -c CONTEXT; [host.\$HOSTNAME]] is provided automatically."
   echo
   echo "NOTE: Only one value is assigned per key in the CONFIG. Multiples overwrite earlier values."
   echo " Some keys (include, exclude) are evaluated to support arrays, like key=('a' 'b')."
   echo
   echo "OPTIONS:"
   echo "  PATH  Path to directory to search for ${SYNC_CONF_PATTERN} files. Defaults to \$PWD."
+  echo "  -c CONTEXT  Add CONTEXT for read-config. Can be used multiple times."
   echo "  -h,--help  Show this help."
   echo "  -n,--dry-run  Make no changes, move no files. Find ${SYNC_CONF_PATTERN} files, and print commands. Implies -y."
   echo "  -y,--no-prompt  Begin syncing without prompting the user first."
@@ -80,6 +84,10 @@ do
       ;;
     -q|--quiet)
       opt[VERBOSE]=-1
+      ;;
+    -c)
+      userContexts+=("$2")
+      shift
       ;;
     -d) # sunset 2026-03-13/2026-06
       opt[BASE]="$2"
@@ -142,15 +150,20 @@ fi
 feedback 0 -E "# [${SCRIPT_NAME}] BEGIN $(date --iso-8601=seconds)"
 
 export SCRIPT_NAME
-export PATH_READ_CONF_SOURCE
+export PATH_SOURCE_READ_CONF
 
 syncCommand=''
 #syncCommand+="SCRIPT_NAME=\"${SCRIPT_NAME}\"; "
 loglevel 2 && syncCommand+='declare -p PWD; '
-syncCommand+=". \"\$PATH_READ_CONF_SOURCE\" || exit; "
+syncCommand+=". \"\$PATH_SOURCE_READ_CONF\" || exit; "
 syncCommand+='read-config '
   loglevel 2 && syncCommand+='-v '
-  syncCommand+='-u -c "$HOSTNAME" -f {}; '
+  syncCommand+='-u '
+  for context in "${userContexts[@]}"
+  do
+    syncCommand+="-c \"${context}\" "
+  done
+  syncCommand+='-f {}; '
 syncCommand+='destination="${config[destination]}"; '
 syncCommand+='[[ -n ${config[subdir]} && -n $destination ]] && destination+="/$(date "+${config[subdir]}")"; '
 syncCommand+='destination="${destination%%/}"; '
@@ -158,9 +171,9 @@ syncCommand+='if [[ -z $destination ]]; then >&2 echo "Empty destination. Skippi
 ! isdry && syncCommand+='mkdir -p "$destination"; '
 syncCommand+='rsyncArgs=(); '
 isdry && syncCommand+='rsyncArgs+=(--dry-run); '
+loglevel 0 && syncCommand+='rsyncArgs+=(--info=progress2); '
 loglevel 1 && syncCommand+='rsyncArgs+=(-v); '
 loglevel 2 && syncCommand+='rsyncArgs+=(--debug=FILTER); '
-#loglevel 0 && syncCommand+='rsyncArgs+=(--info=progress2); '
 syncCommand+='rsyncArgs+=(-r); '
 syncCommand+="rsyncArgs+=(--exclude=\"${SYNC_CONF_PATTERN}\"); "
 syncCommand+='if [[ -n ${config[include]} ]]; then '
@@ -213,10 +226,15 @@ find "${syncFindArgs[@]}"
 
 #postprocessCommand+="SCRIPT_NAME=\"${SCRIPT_NAME}\"; "
 loglevel 2 && postprocessCommand+='declare -p PWD; '
-postprocessCommand+=". \"\$PATH_READ_CONF_SOURCE\" || exit; "
+postprocessCommand+=". \"\$PATH_SOURCE_READ_CONF\" || exit; "
 postprocessCommand+='read-config '
   loglevel 2 && postprocessCommand+='-v '
-  postprocessCommand+='-u -c "$HOSTNAME" -f {}; '
+  postprocessCommand+='-u '
+  for context in "${userContexts[@]}"
+  do
+    postprocessCommand+="-c \"${context}\" "
+  done
+  postprocessCommand+='-f {}; '
 postprocessCommand+='destination="${config[destination]}"; '
 postprocessCommand+='[[ -n ${config[subdir]} && -n $destination ]] && destination+="/$(date "+${config[subdir]}")"; '
 postprocessCommand+='destination="${destination%%/}"; '
@@ -229,6 +247,7 @@ postprocessCommand+='[[ -n ${config[postprocess]} ]] && { '
     postprocessCommand+='; '
   else
     postprocessCommand+='&& '
+    # LATER `destination` as arg $1 is going away 2026-06~. User commands should use . or $PWD instead, since `find -execdir` is being used.  #626ed8d8-2cbd-42d1-8a65-4a430c04af2f
     postprocessCommand+='if [[ ${config[background]} == true ]]; then '
       postprocessCommand+='postprocess "$destination" & '
     postprocessCommand+='else '
