@@ -35,7 +35,7 @@ showHelp()
   echo "  exclude=PATTERN or ('PATTERN'…) # Applies before include (*regardless of CONFIG line order)"
   echo "  include=PATTERN or ('PATTERN'…) # Applies after exclude (^*)"
   echo "  keepcopy=true|false"
-  echo "  postprocess=COMMAND # Run in the destination directory, or the source directory if no destination is defined. Runs after all sync operations."
+  echo "  postprocess=COMMAND # Run in the config directory. \$1 is the destination directory, or the source directory if no destination is defined. Runs after all sync operations."
   echo "  [CONTEXT] # per -c CONTEXT; [host.\$HOSTNAME]] is provided automatically."
   echo
   echo "NOTE: Only one value is assigned per key in the CONFIG. Multiples overwrite earlier values."
