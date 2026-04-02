@@ -1,5 +1,6 @@
 #!/bin/bash
-SCRIPT_VERSION='0.6.4 2026-03-25'
+SCRIPT_VERSION='0.6.5'
+SCRIPT_MODIFIED='2026-04-01'
 SCRIPT_UUID='60dffac9-3444-41bb-bdf6-c9c63cdee89d'
 #SYNC_CONF_FILENAME='.sync.conf'
 SYNC_CONF_PATTERN='.sync*.conf'
@@ -60,7 +61,7 @@ showHelp()
   fi
 
   echo
-  echo "VERSION: ${SCRIPT_VERSION}"
+  echo "${SCRIPT_NAME} version ${SCRIPT_VERSION} (${SCRIPT_MODIFIED})"
 }
 
 while [[ $# -gt 0 ]]
@@ -168,6 +169,7 @@ syncCommand+='destination="${config[destination]}"; '
 syncCommand+='[[ -n ${config[subdir]} && -n $destination ]] && destination+="/$(date "+${config[subdir]}")"; '
 syncCommand+='destination="${destination%%/}"; '
 syncCommand+='if [[ -z $destination ]]; then >&2 echo "Empty destination. Skipping file transfer."; exit; fi; '
+syncCommand+='if [[ $PWD == $destination ]]; then >&2 echo "Source and destination are identical. Skipping file transfer."; exit; fi; '
 ! isdry && syncCommand+='mkdir -p "$destination"; '
 syncCommand+='rsyncArgs=(); '
 isdry && syncCommand+='rsyncArgs+=(--dry-run); '
