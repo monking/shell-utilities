@@ -46,6 +46,7 @@ SCRIPT_DESCRIPTION_LINES=(
   "If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed in the current directory, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
+  "0.2.1 @1776270798  Show check status count.  b2sum=210380c3&size=7070" #nosum
   "0.2.0 @1772840859  Implement SHA256E.  b2sum=bae49c91&size=6804" #nosum
   "0.1.1 @1735249838  Add 'ALG' to '-a' in help.   b2sum=52aa3a44&size=5484" #nosum
   "0.1.0 @1720381791  Show progress (percent an count).   b2sum=14b0e4c8&size=5484" #nosum
@@ -255,7 +256,7 @@ main() {
     while read outputLine; do
       let 'outputLineCount++';
       echo "$outputLine";
-      >&2 echo -n "  $((100 * outputLineCount / fileCount))% (${outputLineCount} files checked)       "$'\r'; # space at the end to blank out long numbers
+      >&2 echo -n $'\r'"  $((100 * outputLineCount / fileCount))% (${outputLineCount} files checked)       "; # space at the end to blank out long numbers
     done;
     >&2 echo;
   };)";
@@ -263,18 +264,23 @@ main() {
   checkStatus=$?;
 
   ## HANDLE OUTPUT:
-  if echo "$checkOutput" \
+  local failedLines
+  failedLines="$(echo "$checkOutput" \
     | tee "${checkOutputCacheFile}" \
-    | grep 'FAILED\|MISSING'; then
+    | grep ': \(FAILED\|MISSING\)')"
+  failedMatchStatus=$?
+  local failedLineCount=$(echo "$failedLines" | wc -l)
+  if [[ $failedMatchStatus -eq 0 ]]; then
+    yell "$failedLines";
     yell "";
-    yell "(Showing only failures…)";
+    yell "${failedLineCount} of ${fileCount} files failed checks ($((100 * (fileCount - failedLineCount) / fileCount))% OK)";
     [[ -t 0 ]] \
       && confirm "See full output?" 'n' \
       && cat <(echo "### output from '${checkCommand[*]}':") "$checkOutputCacheFile" <(echo -e "\n### sum file data being checked:") "$sumFile" | less
   elif [[ $checkStatus != 0 ]]; then
     yell "✗ Finished with problems.";
   else
-    yell "✓ All OK";
+    yell "✓ All OK ($fileCount files)";
   fi
 
   [[ -e "$checkOutputCacheFile" ]] && rm "$checkOutputCacheFile"

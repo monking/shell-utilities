@@ -14,10 +14,10 @@
   SCRIPT_EXAMPLE_COLUMNS=(script description);
   SCRIPT_EXAMPLES=()
   SCRIPT_EXAMPLES+=("sumdir -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
-  SCRIPT_EXAMPLES+=("sumdir -r -exec " "Output an extra column after filename with the result of … (see \`find -exec\`)")
+  #SCRIPT_EXAMPLES+=("sumdir -r -exec COMMAND… ';'" "Output an extra column after filename with the result of COMMAND…")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
   SCRIPT_VERSIONS=(
-    "0.2.1a  @xxxxxxxxxx  WIP: Fix… everything?" #nosum
+    "0.2.1  @1776282812  Collect PATH args explicitly, rather than passing remainder parent args." #nosum
     "0.2.0  @1772841283  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=89819e44&size=16447" #nosum
     "0.1.8  @1760374334  Refactor execution into main function. Repair & extend documentation.  b2sum=4f000838&size=15179" #nosum
     "0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
@@ -82,6 +82,9 @@
       "-X,--exclude-path PATTERN"
       "    Exclude files by name, per \`find \\! -path PATTERN\`; usually of form '*PATTERN*'. env: SUMDIR_LIST_EXCLUDE_PATH"
       ""
+      #"-exec COMMAND… [{}] ';'"
+      #"    Execute COMMAND for each found file; where '{}' is replaced with the filename, and it MUST be ended with a literal ';' semicolon character. See \`find -exec\`"
+      #""
       "--length N        "
       "     (b2sum only) Set the length of the digest hash in bits."
       "     Hashes appear 1/4 this length in hexadecimal (e.g --length 128 yields ."
@@ -152,7 +155,7 @@
 ## APPLICATION:
 {
   main() {
-    local inputDirectories=();
+    local inputDirectories=() userArg findUserArgs=();
 
     setOptsFromEnvAndDefaults;
 
@@ -174,7 +177,14 @@
         --length) opt_list_b2_opts+=(--length $2); shift;;
         -x|--exclude) opt_list_exclude_name+=("$2"); shift;;
         -X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
-        --) shift; break;;
+        -exec|-execdir) # TODO undocumented feature in testing
+          while [[ $# -gt 0 ]]; do
+            findUserArgs+=("$1");
+            [[ "$1" == ';' ]] && break;
+            shift;
+          done
+          ;;
+        --) shift; inputDirectories+=("$@"); shift $#; break;;
         --bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
         --version) echo "${SCRIPT_VERSION_NICE} ($0)"; feedback 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
         *) inputDirectories+=("$1");;
@@ -247,8 +257,8 @@
           findArgs+=(\! -name "$pattern");
         done
       fi
-      if [[ $# -gt 0 ]]; then
-        findArgs+=("$@");
+      if [[ ${#findUserArgs[@]} -gt 0 ]]; then
+        findArgs+=("${findUserArgs[@]}");
       fi
       findArgs+=(-print0);
 
@@ -283,7 +293,6 @@
       if [[ $sumStatus != 0 ]]; then
         exit $sumStatus;
       fi
-
     done
   }
   removeFilesByTemplate() {
