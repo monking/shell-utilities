@@ -14,9 +14,9 @@
   SCRIPT_EXAMPLE_COLUMNS=(script description);
   SCRIPT_EXAMPLES=()
   SCRIPT_EXAMPLES+=("sumdir -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
-  #SCRIPT_EXAMPLES+=("sumdir -r -exec COMMAND… ';'" "Output an extra column after filename with the result of COMMAND…")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
   SCRIPT_VERSIONS=(
+    "0.2.2  @1776735928  Allow adding metadata after arbitrary separator (default TAB); currently only modified time. Fix xargs.  b2sum=f343c91b&size=19278" #nosum
     "0.2.1  @1776282812  Collect PATH args explicitly, rather than passing remainder parent args." #nosum
     "0.2.0  @1772841283  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=89819e44&size=16447" #nosum
     "0.1.8  @1760374334  Refactor execution into main function. Repair & extend documentation.  b2sum=4f000838&size=15179" #nosum
@@ -40,13 +40,19 @@
   SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}";
   SCRIPT_VERSION_NICE="v${SCRIPT_VERSION%%  *}";
 
+  HEADER_IGNORE_STATEMENT="Metadata follows file paths, separated by: "
+  HEADER_IGNORE_TAB_LABEL='Tab character "\t"'
+
+  g_IFS="$IFS"
+  export g_IFS
+
   showHelp() {
     echo "USAGE: $SCRIPT_USAGE";
     echo "PURPOSE: $SCRIPT_PURPOSE";
     echo "";
     echo "OPTIONS:";
     SCRIPT_OPTIONS=(
-      "-h,--help,help"
+      "-h, --help, help"
       "    Show this help"
       ""
       "-a CMD"
@@ -58,40 +64,43 @@
       "-L                "
       "    Dereference (follow) symlinks. env: SUMDIR_SHOULD_DEREFERENCE"
       ""
-      "-1,--single"
+      "-1, --single"
       "    Remove existing *SUM* SUMFILEs in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
       ""
-      "-o,--out TEMPLATE"
+      "-o, --out TEMPLATE"
       "    Output file name template. See 'TEMPLATES' below for substitution patterns. env: SUMDIR_OUTPUT_FILE_TEMPLATE"
       ""
       "-l                "
       "    hostname and PWD in output SUMFILE. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
       ""
-      "-z,--tz TZ"
+      "-z, --tz TZ"
       "    Set timezone for timestamp; default 'UTC'. env: SUMDIR_TIMEZONE"
       ""
-      "-f,--dateformat"
+      "-f, --dateformat"
       "    Set format for timestamp (per GNU coreutils date). env: SUMDIR_DATE_FORMAT"
       ""
-      "-v,--verbose[=N]  "
+      "-v, --verbose[=N]  "
       "    Increase the detail of the info output to STDERR. env: SUMDIR_VERBOSE"
       ""
-      "-x,--exclude PATTERN"
+      "-x, --exclude PATTERN"
       "    Exclude files by name, via \`find \\! -name PATTERN\`. env: SUMDIR_LIST_EXCLUDE_NAME"
       ""
-      "-X,--exclude-path PATTERN"
+      "-X, --exclude-path PATTERN"
       "    Exclude files by name, per \`find \\! -path PATTERN\`; usually of form '*PATTERN*'. env: SUMDIR_LIST_EXCLUDE_PATH"
       ""
-      #"-exec COMMAND… [{}] ';'"
-      #"    Execute COMMAND for each found file; where '{}' is replaced with the filename, and it MUST be ended with a literal ';' semicolon character. See \`find -exec\`"
-      #""
+      "--time"
+      "    (Only with -a sha256e) Add modified time after filename after DELIM."
+      ""
+      "-d DELIM"
+      "    (Only with -a sha256e) Set metadata separator string to DELIM. Defaults to '\\t' Tab character."
+      ""
       "--length N        "
       "     (b2sum only) Set the length of the digest hash in bits."
       "     Hashes appear 1/4 this length in hexadecimal (e.g --length 128 yields ."
       "     Default and maximum is 512 (for an output 128 chars long)."
       "     This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
       "--"
-      "    After this, all further arguments are passed to 'find'"
+      "    After this, all further arguments are passed directly to 'find'."
       ""
       "--bk"
       "    Same as -f '${OPT_OUTPUT_FILE_TEMPLATE_BK}'"
@@ -155,7 +164,7 @@
 ## APPLICATION:
 {
   main() {
-    local inputDirectories=() userArg findUserArgs=();
+    local inputDirectories=() userArg;
 
     setOptsFromEnvAndDefaults;
 
@@ -175,15 +184,10 @@
         -v|--verbose) let opt_verbose++;;
         --verbose=*) opt_verbose=${1#*=};;
         --length) opt_list_b2_opts+=(--length $2); shift;;
+        --time) opt_include_time=true;;
+        -d) opt_column_sep="$2"; shift;;
         -x|--exclude) opt_list_exclude_name+=("$2"); shift;;
         -X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
-        -exec|-execdir) # TODO undocumented feature in testing
-          while [[ $# -gt 0 ]]; do
-            findUserArgs+=("$1");
-            [[ "$1" == ';' ]] && break;
-            shift;
-          done
-          ;;
         --) shift; inputDirectories+=("$@"); shift $#; break;;
         --bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
         --version) echo "${SCRIPT_VERSION_NICE} ($0)"; feedback 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
@@ -192,9 +196,12 @@
       shift;
     done
     feedback 1 "(Verbose output level: ${opt_verbose})";
+    export opt_verbose;
 
     initializeSumCommand;
     initializeJobExecutor;
+
+    export opt_column_sep; # after initializeSumCommand, where it may be reset to empty
 
     [[ ${#inputDirectories[@]} -eq 0 ]] && inputDirectories=("$PWD");
 
@@ -257,16 +264,27 @@
           findArgs+=(\! -name "$pattern");
         done
       fi
-      if [[ ${#findUserArgs[@]} -gt 0 ]]; then
-        findArgs+=("${findUserArgs[@]}");
+      if [[ -n $opt_column_sep ]]; then
+        findArgs+=(-printf '%p'"$opt_column_sep"'%TFT%TT %TZ\0');
+      else
+        findArgs+=(-print0);
       fi
-      findArgs+=(-print0);
 
-      feedback 1 "\$ find ${findArgs[*]}";
+      loglevel 1 && declare -p findArgs
       {
-        echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${CALLED_AS_WITH_ARGS}\`)";
+        echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${SCRIPT_NAME} $(escapeArgs "${CALL_ARGS[@]}")\`)";
+        if [[ -n $opt_column_sep ]]; then
+          local colHeader=""
+          colHeader+="# ${HEADER_IGNORE_STATEMENT}";
+          if [[ $opt_column_sep == '\t' || $opt_column_sep == $'\t' ]]; then
+            colHeader+="${HEADER_IGNORE_TAB_LABEL}";
+          else
+            colHeader+="$(printf %q "$opt_column_sep")";
+          fi
+          echo "$colHeader";
+        fi
         echo "# Same as:  ${sumCommand[*]} FILENAMES";
-        echo "# To check file integrity, run:  ${checkCommand[*]} ${outputFilePath}";
+        echo "# To check file integrity, run:  ${checkCommand[*]} ${outputFilename}";
         local dirPath;
         if [[ $opt_should_include_location_in_output == true ]]; then
           dirPath="${PWD}"
@@ -295,6 +313,7 @@
       fi
     done
   }
+
   removeFilesByTemplate() {
     local template="$1";
 
@@ -304,14 +323,13 @@
     templateStar="${templateStar//%a/$opt_algorithm}";
     templateStar="${templateStar//%A/${algoUpper}}";
     feedback 2 "Pattern for files to remove: ${templateStar}";
-    local oIFS="$IFS";
     local IFS='*';
     local templateParts=($templateStar);
     local idxLastTemplatePart=$(( ${#templateParts[@]} - 1 )); # For Bash 3.2.x compatibility, rather than using index -1.
     if [[ -n ${templateParts[$idxLastTemplatePart]} && $templateStar =~ \*$ ]]; then
       templateParts+=("");
     fi
-    IFS="$oIFS";
+    IFS="$g_IFS";
 
     local removeCommand=trash;
     command -v "$removeCommand" &>/dev/null || removeCommand=rm;
@@ -326,6 +344,7 @@
       4) $removeCommand "${templateParts[0]}"*"${templateParts[1]}"*"${templateParts[2]}"*"${templateParts[3]}";;
     esac
   }
+
   initializeSumCommand() {
     # Not `local`: setting in caller context.
     sumCommand=();
@@ -359,21 +378,44 @@
         ;;
       *) die "Unknown sum algorithm '${opt_algorithm}'. Aborting for safety.";;
     esac
+
     sumCommand+=(--); # no more options, in case filenames/paths begin with `-`.
+
+    if [[ $opt_include_time == true ]]; then
+      checkCommand=(checkdir) # Count on checkdir ^0.2.3 to detect separator header.
+    fi
+
     if command -v "${sumCommand[0]}" &>/dev/null; then
       feedback 1 "Using $(which "${sumCommand[0]}")";
     else
       die "Missing selected checksum software: ${sumCommand[0]}.";
     fi
     algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
+
+    if [[ $opt_algorithm != sha256e ]]; then
+      opt_column_sep= # Not warning, as it is non-empty by default.
+      if [[ $opt_include_time != false ]]; then
+        feedback 0 "WARNING: Time metadata is only available with -a sha256e"
+        opt_include_time=false
+      fi
+    fi
   }
+
   initializeJobExecutor() {
     if command -v parallel &>/dev/null; then
-      jobExecutor=(parallel -0 --bar); return 0; fi;
-    if command -v xargs &>/dev/null; then
-      jobExecutor=(xargsNulWrapper); return 0; fi;
-    die "Missing parallel and xargs.";
+      jobExecutor=(parallel -0 --bar);
+    elif command -v xargs &>/dev/null; then
+      jobExecutor=(xargsNulWrapper);
+    else
+      die "Missing parallel and xargs.";
+      return 1
+    fi;
+    if [[ $opt_include_time == true ]]; then
+      jobExecutor+=(jobWithMetadata);
+    fi
+    return 0
   }
+
   xargsNulWrapper() {
     # Invoking bash in order to access exported functions.
     local bashCommandQuoted=()
@@ -381,17 +423,20 @@
       bashCommandQuoted+=("$(printf %q "$1")");
       shift;
     done
-    xargs -0 -i bash -c "${bashCommandQuoted[*]}" {};
+    xargs -i -0 bash -c "${bashCommandQuoted[*]} {}";
   }
+
   sumSHA256E() {
-    local path basename size sum ext maxExtlen=10
+    local parseArgs=true path basename size sum ext maxExtlen=10
     while [[ $# -gt 0 ]]; do
-      if [[ $1 == '--' ]]; then
+      if [[ $parseArgs == true && $1 == '--' ]]; then
         shift;
+        parseArgs=false;
         continue;
       fi
       path="$1"
       shift
+      [[ -n $path ]] || continue
       basename="$(basename "$path")"
       size=($(du -L -b "$path")) || continue
       sum=($(sha256sum "$path")) || continue
@@ -405,27 +450,62 @@
     done
   }
   export -f sumSHA256E
+
+  jobWithMetadata() {
+    local command=("$1" "$2"); # Assuming $2 is '--'
+    shift 2;
+    local remainder="$*";
+    local buffer= arg=;
+    while [[ ${#remainder} -gt 0 ]]; do
+      buffer+="${remainder:0:1}";
+      remainder="${remainder:1}";
+      if [[ $buffer == $opt_column_sep ]]; then
+        break;
+      elif [[ $buffer != ${opt_column_sep:0:${#buffer}} ]]; then
+        arg+="$buffer";
+        buffer=;
+      fi
+    done
+    if [[ -n $arg ]]; then
+      command+=("$arg");
+    fi
+    local output;
+    output="$("${command[@]}")";
+    local status=$?;
+    loglevel 1 && >&2 declare -p command output opt_column_sep arg buffer remainder;
+    if [[ -n $remainder ]]; then
+      output+="${opt_column_sep}${remainder}";
+    fi
+    echo "$output";
+    return $status;
+  }
+  export -f jobWithMetadata
 }
 
 ## PLUMBING:
 {
-  die() { feedback 0 "$@"; exit 111; }
-  must() { "$@" || die "cannot $*"; }
-  feedback() { [[ $opt_verbose -ge $1 ]] || return; shift; >&2 echo "$@"; }
+  die() { feedback 0 "$@"; exit 111; }; export -f die;
+  must() { "$@" || die "cannot $*"; }; export -f must;
+  loglevel() { [[ $opt_verbose -ge $1 ]] }; export -f loglevel;
+  feedback() { loglevel $1 || return; shift; >&2 echo "$@"; }; export -f feedback;
+
   getValueIfDefined() {
     varName="$1";
     eval "[ -n \"\${${varName}+v}\" ] && echo -en \"\$${varName}\"";
     local status=$?;
     return $status;
   }
+
   toLowerCase() {
     #perl -C -lne 'print uc';
     tr '[:upper:]' '[:lower:]';
   }
+
   toUpperCase() {
     #perl -C -lne 'print uc';
     tr '[:lower:]' '[:upper:]';
   }
+
   getArrayFromColonList() {
     local varName="$1";
     local colonValue="$2";
@@ -442,10 +522,12 @@
     listValue+=("${colonValue}");
     eval "${opt}=(\"\${listValue[@]}\")"
   }
+
   fullPath() {
     local inputPath="$1";
     echo "$(cd "${inputPath%/*}" &>/dev/null && echo -n "${PWD}/${inputPath##*/}")";
   }
+
   dereferenceSymlink() {
     local linkPath="$1";
     local realPath;
@@ -458,6 +540,18 @@
     done
     fullPath "${linkPath}";
   }
+
+  escapeArgs() {
+    local output=;
+    while [[ $# -gt 0 ]]; do
+      [[ -n $output ]] && output+=' ';
+      output+="$(printf %q "$1")"
+      shift;
+    done
+    echo "$output";
+  }
+  export -f escapeArgs
+
   if ! command -v sha256sum &>/dev/null && command -v shasum &>/dev/null; then
     sha256sum() { shasum -a 256 "$@"; }
     export -f sha256sum;
@@ -467,7 +561,9 @@
 ## CONFIGURATION:
 {
   DEFAULT_ALGORITHM='sha256';
+  DEFAULT_COLUMN_SEP='\t';
   DEFAULT_DATE_FORMAT='+%Y%m%dT%H%M%SZ';
+  DEFAULT_INCLUDE_TIME=false;
   DEFAULT_LIST_EXCLUDE_NAME='.DS_Store:.thumbnails';
   DEFAULT_LIST_EXCLUDE_PATH='*/.git/*:*/node_modules/*';
   DEFAULT_OUTPUT_FILE_TEMPLATE='.SUM%A--%d'; # previously '.SHA256SUM--{}'
@@ -478,14 +574,16 @@
   DEFAULT_TIMEZONE=UTC;
   DEFAULT_VERBOSE=0;
   SCRIPT_NAME="${0##*/}";
-  CALLED_AS_WITH_ARGS="${SCRIPT_NAME} $*";
+  CALL_ARGS=("$@");
   OPT_OUTPUT_FILE_TEMPLATE_BK='%d..%ASUM';
   OPT_VAR_NAMES=(
   opt_algorithm
+  opt_column_sep
   opt_date_format
+  opt_include_time
+  opt_list_b2_opts
   opt_list_exclude_name
   opt_list_exclude_path
-  opt_list_b2_opts
   opt_list_sha_opts
   opt_output_file_template
   opt_should_dereference

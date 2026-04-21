@@ -7,7 +7,8 @@
 yell() { echo "$@" >&2; }
 die() { yell "$@"; exit 111; }
 must() { "$@" || die "cannot $*"; }
-whisper() { local volume=$1; shift; [[ $opt_verbose -ge $volume ]] && yell "$@"; }
+loglevel() { [[ $opt_verbose -ge $1 ]] }
+feedback() { loglevel $1 || return; shift; yell "$@"; }
 
 toLowerCase() {
   #perl -C -lne 'print uc';
@@ -35,17 +36,20 @@ fi
 
 SCRIPT_USAGE="${0##*/} [OPTIONS] [SUMFILE…]"
 SCRIPT_OPTIONS=(
-  "--help|help|-h  Show this help."
-  "--version       Show the script version."
-  "-a ALG          Set encryption algorithm: 'sha256', 'b2', 'sha256e' (alias 'annex')."
-  "-e              Only check if files in SUMFILE exist, and output missing filenames."
-  "-l              Only output the SUMFILE path found/selected."
-  "-v              Show more verbose output."
+  "--help, help, -h\tShow this help."
+  "--version\tShow the script version."
+  "-a ALG\tSet encryption algorithm: 'sha256', 'b2', 'sha256e' (alias 'annex')."
+  "-e\t\tOnly check if files in SUMFILE exist, and output missing filenames."
+  "-l\t\tOnly output the SUMFILE path found/selected."
+  "-I END\t(Only with -a sha256e) Ignore END and anything after it on each line. If omitted, this option obeys a header describing such a separator."
+  "-v\t\tShow more verbose output."
 )
 SCRIPT_DESCRIPTION_LINES=(
   "If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed in the current directory, and the newest one is used."
 )
 SCRIPT_VERSIONS=(
+  "0.2.3 @1776735365  Detect metadata ignore character from header.  b2sum=a6a921eb&size=8411" #nosum
+  "0.2.2 @1776439751  Allow checking sum files with extra data after file path.  b2sum=2f99f2f9&size=7360" #nosum
   "0.2.1 @1776270798  Show check status count.  b2sum=210380c3&size=7070" #nosum
   "0.2.0 @1772840859  Implement SHA256E.  b2sum=bae49c91&size=6804" #nosum
   "0.1.1 @1735249838  Add 'ALG' to '-a' in help.   b2sum=52aa3a44&size=5484" #nosum
@@ -69,7 +73,7 @@ showHelp() {
   echo "OPTIONS:";
   local opt;
   for opt in "${SCRIPT_OPTIONS[@]}"; do
-    echo "  ${opt}"
+    echo -e "  ${opt}"
   done
   echo "";
   echo "DESCRIPTION:";
@@ -124,7 +128,7 @@ initializeSumCommand() {
     *) die "Unknown sum algorithm '${opt_algorithm}'.";;
   esac
   if command -v "${sumCommand[0]}" &>/dev/null; then
-    whisper 1 "Using $(which "${sumCommand[0]}")";
+    feedback 1 "Using $(which "${sumCommand[0]}")";
   else
     die "Missing checksum software: ${sumCommand[0]}.";
   fi
@@ -140,8 +144,15 @@ getSumFile() {
 }
 
 countFilesInSumFile() {
+  grep -Ecv '^\s*(#.*)\s*$' "$1";
+}
+
+describeIgnoreAfter() {
   local sumFile="$1"
-  grep -Ecv '^\s*(#.*)\s*$' "$sumFile";
+  local pattern="^\\s*#\\s*[^:]*(separat|metadata|ignore)[^:]*: ?'?(.+)'?\$"
+  local header
+  header="$(head -10 "$sumFile" | grep -i -P "$pattern")" || return
+  echo "$header" | perl -pe "s/$pattern/\$2/i";
 }
 
 describeSumFile() {
@@ -156,6 +167,11 @@ describeSumFile() {
     description+="; descends into directories";
   fi;
 
+  local metadataSeparator="$3"
+  if [[ -n $metadataSeparator ]]; then
+    description+="; metadata after ${metadataSeparator}";
+  fi;
+
   echo -n "$description";
 }
 
@@ -168,8 +184,12 @@ checksumSHA256E() {
     esac
     shift
   done
-  while read -r key path; do
+  local readOpts=(-r)
+  while read "${readOpts[@]}" key path; do
     [[ $key =~ ^\s*# ]] && continue;
+    if [[ -n $opt_ignoreAfter ]]; then
+      path="${path%%${opt_ignoreAfter}*}"
+    fi
     if ! [[ -e "$path" ]]; then
       status='FAILED open or read';
     else
@@ -195,11 +215,11 @@ checkdir_doPathsInSumFileExist() {
   local numTotal=0 numPresent=0 numMissing=0;
   local exitStatus=0;
 
-  whisper 2 "About to read sumfile(${sumFile}) line by line in Bash.";
+  feedback 2 "About to read sumfile(${sumFile}) line by line in Bash.";
   local hash path;
   while read hash path; do
     if [[ -z $hash || -z "$path" || $hash =~ ^[[:space:]]*# ]]; then
-      whisper 2 "Skipping commented line: ${hash} ${path}";
+      feedback 2 "Skipping commented line: ${hash} ${path}";
       continue;
     fi;
 
@@ -237,16 +257,33 @@ main() {
 
   checkOutputCacheFile="${TMPDIR}/.checking.${sumFile##*/}.${RANDOM}.log";
   local fileCount="$(countFilesInSumFile "$sumFile")";
-  yell "Checking files against $sumFile ($(describeSumFile "$sumFile" "$fileCount"))";
+
+  local metadataSeparatorDescription
+  if [[ -z $opt_ignoreAfter ]]; then
+    metadataSeparatorDescription="$(describeIgnoreAfter "$sumFile")"
+    metadataSeparatorStatus=$?
+    if [[ $metadataSeparatorStatus -eq 0 ]]; then
+      case $metadataSeparatorDescription in
+        *\\t*|*Tab*|*tab*) opt_ignoreAfter=$'\t';;
+        *) opt_ignoreAfter="$metadataSeparatorDescription";;
+      esac
+    else
+      metadataSeparatorDescription=
+    fi
+  fi
+  #loglevel 1 && >&2 declare -p opt_ignoreAfter metadataSeparatorDescription metadataSeparatorStatus;
+
+  yell "Checking files against $sumFile ($(describeSumFile "$sumFile" "$fileCount" "$metadataSeparatorDescription"))";
 
   ## PREPARING EXECUTION:
   checkCommand=();
   if [[ $opt_check_exists_only != 'true' ]]; then
     initializeSumCommand;
-    checkCommand+=("${sumCommand[@]}" --check "$sumFile");
+    checkCommand+=("${sumCommand[@]}" --check);
   else
-    checkCommand+=(checkdir_doPathsInSumFileExist "$sumFile");
+    checkCommand+=(checkdir_doPathsInSumFileExist);
   fi
+  checkCommand+=("$sumFile")
 
   ## EXECUTION:
   # WISH (B) 2024-07-07 parallelize file hash check
@@ -261,7 +298,7 @@ main() {
     >&2 echo;
   };)";
   
-  checkStatus=$?;
+  checkStatus=$?; # FIXME Status of checkCommand obscured by reading outputLine and subsequent echos.  uuid:14601836-19ee-4744-8e0c-cd40cea53393
 
   ## HANDLE OUTPUT:
   local failedLines
@@ -295,6 +332,7 @@ main() {
 opt_algorithm=sha256;
 opt_check_exists_only=false;
 opt_verbose=0;
+opt_ignoreAfter=
 sumCommand=();
 sumFileArgs=();
 
@@ -303,6 +341,7 @@ while [[ $# -gt 0 ]]; do
     --help|help|-h) showHelp; exit;;
     -a) opt_algorithm="$2"; shift;;
     -e) opt_check_exists_only=true;;
+    -I) opt_ignoreAfter+="$2"; shift;;
     -l) getSumFile; exit;;
     -v) let opt_verbose++;;
     --version) echo "v${SCRIPT_VERSION%%  *} ($0)"; exit;;
@@ -310,6 +349,8 @@ while [[ $# -gt 0 ]]; do
   esac
   shift;
 done
+
+feedback 1 "Log level: $opt_verbose"
 
 main "${sumFileArgs[@]}";
 
