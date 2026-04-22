@@ -1,7 +1,7 @@
 #!/bin/bash
 
-READ_CONFIG_VERSION=0.6.5
-READ_CONFIG_MODIFIED=2026-03-25
+READ_CONFIG_VERSION=0.6.6
+READ_CONFIG_MODIFIED=2026-04-22
 
 shopt -s extglob # For +() pattern matching (stripping indentation, mushing -vv together).
 read-config()
@@ -18,7 +18,7 @@ read-config()
   do
     case $1 in
       -h|--help)
-        help-read-config
+        echo "$HELP_READ_CONFIG"
         return
         ;;
       -f)
@@ -172,62 +172,63 @@ read-config()
   fi
 }
 
-help-read-config()
-{
-  echo "SUMMARY: Read config text into shell variables."
-  echo "USAGE: read-config [-c,--context=CONTEXT…] [-n,--name=NAME] [-f FILE] [-v…] [-h]"
-  echo "BEHAVIOR, OPTIONS:"
-  echo "  If no NAME is specified, it defaults to 'config'."
-  echo "  Associative arrays (hashes) are created:"
-  echo "  * NAME: containing the main config, joined with any CONTEXTs matching -c CONTEXT"
-  echo "  * NAME_CONTEXT…: one for each CONTEXT in the config input (where the _CONTEXT suffix has '_' (underscore) in place of any non-alphanumeric characters.)"
-  echo
-  echo "  Indexed arrays (lists) are also created:"
-  echo "  * _NAME_hashes: the names of the associative arrays"
-  echo "  * _NAME_contexts: the unaltered names of the contexts in the config input"
-  echo "  * _NAME_comments: any comment or unknown lines in the config input"
-  echo
-  echo "  If one or more CONTEXT is given with -c, then matching contexts are combined into the primary config array."
-  echo "  Without \`-u\`,\`--unset\`, any array that exists before the command is run will be added to."
-  echo "  FILE may be \`-\` to read from STDIN (same as the default when -f FILE is omitted)."
-  echo "  Show verbose output with -v… (e.g. -vv for more info). Show this help with -h or --help."
-  echo
-  echo "CONFIG FORMAT:"
-  echo "  The config format is akin to TOML, but stupider."
-  echo "  * Definitions are 'KEY=VALUE', without space around '=', and without quotation."
-  echo "  * VALUE beginning with '~' will have \$HOME substituted for '~'"
-  echo "  * Lines in square brackets begin a CONTEXT."
-  echo "  * Indentation is ignored everywhere."
-  echo "  * Lines ending with '\\' backslashes carry over VALUE definitions into the next line."
-  echo "  * A line beginning with '#' is a comment; the '#' may be indented."
-  echo "  * A '#' after a non-whitespace character is part of the value. Comments cannot be on the same line as a value."
-  echo "  * Lines not understood by the format are also considered comments."
-  echo
-  echo "CONFIG EXAMPLE:"
-  echo "  title=Sample config file"
-  echo "  myName=Nobody"
-  echo "  [home]"
-  echo "    Whoops, bad line\\"
-  echo "    myName=Nick\\"
-  echo "      name \\"
-  echo "      for days"
-  echo "  [office]"
-  echo "    myName=Nicholas"
-  echo "  [office.overtime]"
-  echo "    # serious business"
-  echo "    myName=Nicholas, Sir"
-	echo
-  echo "read via \`read-config -v -c office\`, results in:"
-  echo "  # [read-config] MATCH context: office"
-  echo "  declare -A config=([myName]=\"Nicholas\" [title]=\"Sample config file\" )"
-  echo "  declare -A config_home=([myName]=\"Nickname for days\" )"
-  echo "  declare -A config_office=([myName]=\"Nicholas\" )"
-  echo "  declare -A config_office_overtime=([myName]=\"Nicholas, Sir\" )"
-  echo "  declare -a _config_hashes=([0]=\"config\" [1]=\"config_home\" [2]=\"config_office\" [3]=\"config_office_overtime\")"
-  echo "  declare -a _config_contexts=([0]=\"home\" [1]=\"office\" [2]=\"office.overtime\")"
-  echo "  declare -a _config_comments=([0]=\"Whoops, bad line\\\\\" [1]=\"# serious business\")"
-  echo
-  echo "NOTE: Definitions won't reach the call context if read-config is in a subshell, such as \`echo key=value | read-config\`. You might do \`read-config <<<\"\$(echo key=value)\"\` instead."
-  echo
-  echo "(read-config version ${READ_CONFIG_VERSION} ${READ_CONFIG_MODIFIED})"
-}
+HELP_READ_CONFIG="$(cat <<'EOF_HELP'
+SUMMARY: Read config text into shell variables.
+USAGE: read-config [-c,--context=CONTEXT…] [-n,--name=NAME] [-f FILE] [-v…] [-h]
+BEHAVIOR, OPTIONS:
+  If no NAME is specified, it defaults to 'config'.
+  Associative arrays (hashes) are created:
+  * NAME: containing the main config, joined with any CONTEXTs matching -c CONTEXT
+  * NAME_CONTEXT…: one for each CONTEXT in the config input (where the _CONTEXT suffix has '_' (underscore) in place of any non-alphanumeric characters.)
+
+  Indexed arrays (lists) are also created:
+  * _NAME_hashes: the names of the associative arrays
+  * _NAME_contexts: the unaltered names of the contexts in the config input
+  * _NAME_comments: any comment or unknown lines in the config input
+
+  If one or more CONTEXT is given with -c, then matching contexts are combined into the primary config array.
+  Without `-u`,`--unset`, any array that exists before the command is run will be added to.
+  FILE may be `-` to read from STDIN (same as the default when -f FILE is omitted).
+  Show verbose output with -v… (e.g. -vv for more info). Show this help with -h or --help.
+
+CONFIG FORMAT:
+  The config format is akin to TOML, but stupider.
+  * Definitions are 'KEY=VALUE', without space around '=', and without quotation.
+  * VALUE beginning with '~' will have $HOME substituted for '~'
+  * Lines in square brackets begin a CONTEXT.
+  * Indentation is ignored everywhere.
+  * Lines ending with '\' backslashes carry over VALUE definitions into the next line.
+  * A line beginning with '#' is a comment; the '#' may be indented.
+  * A '#' after a non-whitespace character is part of the value. Comments cannot be on the same line as a value.
+  * Lines not understood by the format are also considered comments.
+
+CONFIG EXAMPLE:
+  title=Sample config file
+  myName=Nobody
+  [home]
+    Whoops, bad line\
+    myName=Nick\
+      name \
+      for days
+  [office]
+    myName=Nicholas
+  [office.overtime]
+    # serious business
+    myName=Nicholas, Sir
+
+read via `read-config -v -c office`, results in:
+  # [read-config] MATCH context: office
+  declare -A config=([myName]="Nicholas" [title]="Sample config file" )
+  declare -A config_home=([myName]="Nickname for days" )
+  declare -A config_office=([myName]="Nicholas" )
+  declare -A config_office_overtime=([myName]="Nicholas, Sir" )
+  declare -a _config_hashes=([0]="config" [1]="config_home" [2]="config_office" [3]="config_office_overtime")
+  declare -a _config_contexts=([0]="home" [1]="office" [2]="office.overtime")
+  declare -a _config_comments=([0]="Whoops, bad line\\" [1]="# serious business")
+
+NOTE: If read-config is run in a subshell, such as in a pipeline like `echo key=value | read-config`*, its results will not exist outside that subshell. You might do `read-config < <(echo key=value)` instead.
+  * For more about subshells and pipelines, see <https://www.gnu.org/software/bash/manual/html_node/Pipelines.html#Pipelines-1:~:text=its%20own%20subshell>
+EOF_HELP
+)
+
+(read-config version ${READ_CONFIG_VERSION} ${READ_CONFIG_MODIFIED})"
