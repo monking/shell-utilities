@@ -18,7 +18,7 @@ read-config()
   do
     case $1 in
       -h|--help)
-        echo "$HELP_READ_CONFIG"
+        echo "$HELP_READ_CONFIG" | less
         return
         ;;
       -f)
@@ -193,16 +193,18 @@ BEHAVIOR, OPTIONS:
 
 CONFIG FORMAT:
   The config format is akin to TOML, but stupider.
-  * Definitions are 'KEY=VALUE', without space around '=', and without quotation.
-  * VALUE beginning with '~' will have $HOME substituted for '~'
-  * Lines in square brackets begin a CONTEXT.
+  * Definitions are KEY=VALUE, without space around '=', and without quotation.
   * Indentation is ignored everywhere.
-  * Lines ending with '\' backslashes carry over VALUE definitions into the next line.
+  * Lines in [square brackets] begin a CONTEXT.
+  * A '~' tilde at the beginning of a VALUE will be substituted with $HOME.
+  * Lines ending with '\' backslash carry over VALUE definitions into the next line.
   * A line beginning with '#' is a comment; the '#' may be indented.
-  * A '#' after a non-whitespace character is part of the value. Comments cannot be on the same line as a value.
+  * Comments cannot be on the same line as a value. A '#' on a VALUE line is part of the VALUE.
   * Lines not understood by the format are also considered comments.
 
-CONFIG EXAMPLE:
+EXAMPLE:
+```
+read-config -v -c office < <(cat <<'EOF'
   title=Sample config file
   myName=Nobody
   [home]
@@ -210,24 +212,30 @@ CONFIG EXAMPLE:
     myName=Nick\
       name \
       for days
+    # Note that space before '\' wrap remains.
   [office]
     myName=Nicholas
   [office.overtime]
     # serious business
     myName=Nicholas, Sir
+EOF
+)
+# [read-config] MATCH context: office
+declare -A config=([myName]="Nicholas" [title]="Sample config file" )
+declare -A config_home=([myName]="Nickname for days" )
+declare -A config_office=([myName]="Nicholas" )
+declare -A config_office_overtime=([myName]="Nicholas, Sir" )
+declare -a _config_hashes=([0]="config" [1]="config_home" [2]="config_office" [3]="config_office_overtime")
+declare -a _config_contexts=([0]="home" [1]="office" [2]="office.overtime")
+declare -a _config_comments=([0]="Whoops, bad line\\" [1]="# Note that space before '\\' wrap remains." [2]="# serious business")
+```
+(END EXAMPLE)
 
-read via `read-config -v -c office`, results in:
-  # [read-config] MATCH context: office
-  declare -A config=([myName]="Nicholas" [title]="Sample config file" )
-  declare -A config_home=([myName]="Nickname for days" )
-  declare -A config_office=([myName]="Nicholas" )
-  declare -A config_office_overtime=([myName]="Nicholas, Sir" )
-  declare -a _config_hashes=([0]="config" [1]="config_home" [2]="config_office" [3]="config_office_overtime")
-  declare -a _config_contexts=([0]="home" [1]="office" [2]="office.overtime")
-  declare -a _config_comments=([0]="Whoops, bad line\\" [1]="# serious business")
-
-NOTE: If read-config is run in a subshell, such as in a pipeline like `echo key=value | read-config`*, its results will not exist outside that subshell. You might do `read-config < <(echo key=value)` instead.
-  * For more about subshells and pipelines, see <https://www.gnu.org/software/bash/manual/html_node/Pipelines.html#Pipelines-1:~:text=its%20own%20subshell>
+NOTE: If read-config is run in a subshell, its results will not exist outside that subshell.
+  For example, `echo key=value | read-config;` will not work as intended.
+  You might do `read-config < <(echo key=value)` instead.
+  For more about subshells and pipelines, see:
+    https://www.gnu.org/software/bash/manual/html_node/Pipelines.html#Pipelines-1:~:text=its%20own%20subshell
 EOF_HELP
 )
 
