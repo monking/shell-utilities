@@ -16,6 +16,7 @@
   SCRIPT_EXAMPLES+=("sumdir -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
   SCRIPT_VERSIONS=(
+    "0.2.3  @1776972889  Fix logic around including modified time. Omit sort (allow continuous output).  b2sum=13ec348f&size=19404" #nosum
     "0.2.2  @1776735928  Allow adding metadata after arbitrary separator (default TAB); currently only modified time. Fix xargs.  b2sum=f343c91b&size=19278" #nosum
     "0.2.1  @1776282812  Collect PATH args explicitly, rather than passing remainder parent args." #nosum
     "0.2.0  @1772841283  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=89819e44&size=16447" #nosum
@@ -264,8 +265,12 @@
           findArgs+=(\! -name "$pattern");
         done
       fi
-      if [[ -n $opt_column_sep ]]; then
-        findArgs+=(-printf '%p'"$opt_column_sep"'%TFT%TT %TZ\0');
+      if [[ $opt_include_time == true ]]; then
+        if [[ -n $opt_column_sep ]]; then
+          findArgs+=(-printf '%p'"$opt_column_sep"'%TFT%TT %TZ\0');
+        else
+          findArgs+=(-printf '%p\t%TFT%TT %TZ\0');
+        fi
       else
         findArgs+=(-print0);
       fi
@@ -302,8 +307,8 @@
           #| perl -pe 's/(^|\x00)\.\//\1/g' \
         must find "${findArgs[@]}" \
           | sed -E 's/(^|\x00)\.\//\1/g' \
-          | "${jobExecutor[@]}" "${sumCommand[@]}" \
-          | sort -k2;
+          | "${jobExecutor[@]}" "${sumCommand[@]}";
+        # LATER Sort file list by path (`sort -k2`). todo.sumdir.txt#a0a942a5-d08d-469c-b572-ee8b3e8ae4ec
       } > "${outputFilePath}";
       local sumStatus=$?;
       feedback 0 "Generated ${outputFilePath}";
