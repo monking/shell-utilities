@@ -1,0 +1,56 @@
+date	script	version	note	sum
+2026-04-23	sumdir	0.2.4	External changelog.	b2sum=026c5def&size=19540
+2026-04-23	sumdir	0.2.3	Fix logic around including modified time. Omit sort (allow continuous output).	b2sum=13ec348f&size=19404
+2026-04-23	checkdir	0.2.4	External changelog.	b2sum=ed095017&size=8530
+2026-04-23	changelog.tsv	0.0.1	Compiling changelog from scripts. Not comprehensive, and may not be kept 100% up to date.
+2026-04-22	read-config	0.6.6	Update doc.	b2sum=1ae40a1b&size=7963
+2026-04-21	sumdir	0.2.2	Allow adding metadata after arbitrary separator (default TAB); currently only modified time. Fix xargs.	b2sum=f343c91b&size=19278
+2026-04-21	checkdir	0.2.3	Detect metadata ignore character from header.	b2sum=a6a921eb&size=8411
+2026-04-17	checkdir	0.2.2	Allow checking sum files with extra data after file path.	b2sum=2f99f2f9&size=7360
+2026-04-15	sumdir	0.2.1	Collect PATH args explicitly, rather than passing remainder parent args.
+2026-04-15	checkdir	0.2.1	Show check status count.	b2sum=210380c3&size=7070
+2026-04-06	getDescendantPIDs.sh	0.0.2
+2026-04-01	sync	0.6.5
+2026-03-25	sync	0.6.4
+2026-03-25	read-config	0.6.5
+2026-03-20	sync	0.6.3
+2026-03-20	sync	0.6.2
+2026-03-19	sync	0.6.1
+2026-03-13	sync	0.6.0
+2026-03-12	sync	0.4.4
+2026-03-12	read-config	0.6.3	First version added to shell-utilities repo.
+2026-03-06	sumdir	0.2.0	Implement SHA256E sum. Abstract sha256sum polyfill.	b2sum=89819e44&size=16447
+2026-03-06	checkdir	0.2.0	Implement SHA256E.	b2sum=bae49c91&size=6804
+2025-10-24	timecode	0.2.2	Remove author from version output.
+2025-10-24	timecode	0.2.1	Whitespace
+2025-10-23	date-week	0.0.5
+2025-10-13	timecode	0.2.0	First version added to shell-utilities, w/ -d, --decode
+2025-10-13	sumdir	0.1.8	Refactor execution into main function. Repair & extend documentation.	b2sum=4f000838&size=15179
+2025-01-27	date-week	0.0.3
+2025-01-08	date-week	0.0.2
+2025-01-08	date-week	0.0.1
+2024-12-26	checkdir	0.1.1	Add 'ALG' to '-a' in help.	b2sum=52aa3a44&size=5484
+2024-07-07	checkdir	0.1.0	Show progress (percent an count).	b2sum=14b0e4c8&size=5484
+2024-01-29	sumdir	0.1.7	Add \`--\` before filenames, in case paths begin with \`-\`.	b2sum=59241fc0&size=13370
+2023-11-09	sumdir	0.1.6	Template can contain output path. More documentation.	b2sum=6ef9ea3c&size=13289
+2023-10-19	sumdir	0.1.5	Fallback to xargs for executing digest commands if parallel not found.	b2sum=fb9ebc12&size=12228&commit=9b8aeca
+2023-09-27	sumdir	0.1.4	Improved documentation, esp. environment variables.	b2sum=ad161516&size=11916
+2023-04-11	sumdir	0.1.3	Sort digest output by file path.	b2sum=af60835a&size=11528
+2022-12-13	sumdir	0.1.2	Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).	b2sum=5252a8b4&b2_length=32&size=11500
+2022-12-13	checkdir	0.0.7	Support for Bash 3.2.x; require tr instead of perl.	sum:db71df2c#a=b2,l=32;size:4959
+2022-12-13	checkdir	0.0.6	Added option -l to output selected SUM file path.	sum:8e5df517#a=b2,l=32;size:4800
+2022-12-12	checkdir	0.0.5	Allow checking only existence of files from SUMFILE (opt '-e').	sum:a4a54a563924caca275b3626734ee015#a=b2,l=128;size:5205
+2022-12-01	sumdir	0.1.1	Add '--length N' option (currently for b2sum only).	b2sum=f6a28dc2&b2_length=32&size=12099
+2022-12-01	sumdir	0.1.0	Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names.
+2022-12-01	checkdir	0.0.4	Detect sum algorithm from sum filename (supported: '*B2*' => b2; all else => sha256)
+2022-11-30	sumdir	0.0.9	Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value.
+2022-11-28	sumdir	0.0.8	Add support for multiple optional PATH arguments.
+2022-10-19	sumdir	0.0.7	BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)
+2022-10-19	checkdir	0.0.3	BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)
+2022-09-26	sumdir	0.0.6	Adding SUMDIR_* env config. Put directory path in output file, with option '-l'.
+2022-09-26	sumdir	0.0.4	Exclude .git contents.
+2022-09-26	sumdir	0.0.3	'-r' To let find go deep; args after -- go to find.
+2022-09-26	sumdir	0.0.2	Added --exclude PATTERN option.
+2022-09-26	sumdir	0.0.1
+2022-09-26	checkdir	0.0.2	Added help.
+2022-09-26	checkdir	0.0.1 

@@ -1,3 +1,4 @@
 (B) 2026-04-20 Don't create an output file if it will be empty of paths.  uuid:31233d16-bc32-4348-a041-c6aad5fad494
-(B) 2026-04-20 Output is duplicated when using --time and running via parallel. Status bar output like (with placeholders N and T): "N% x:0=Ts …"; redundant output like "#   T sec …".  uuid:b1cc1a37-0493-49ff-acef-d2b7ac05a0ef
-(B) 2026-04-23 +LATER Sort file list by path (`sort -k2`). Omitting for now, in favor of continuous output.  uuid:a0a942a5-d08d-469c-b572-ee8b3e8ae4ec
+(C) 2026-04-20 STDERR output is duplicated when using --time and running via parallel. Status bar output like (with placeholders N and T): "N% x:0=Ts …"; redundant output like "#   T sec …".  uuid:b1cc1a37-0493-49ff-acef-d2b7ac05a0ef
+(C) 2026-04-23 +LATER --continue=FILE Copy contents of FILE into new sumfile, and skip any paths already calculated in FILE.  uuid:4b12f8c8-2665-41f7-a712-298e53ce3b6d  | May be best served by implementing a wrapper function for all sum algorithms, so that this logic could pertain to all of them. Currently, only SHA256E is implemented as an internal function, and making yet another special case for this seems ill-advised.
+(C) 2026-04-23 +LATER Sort file list by path (`sort -k2`). Omitting for now, in favor of continuous output.  uuid:a0a942a5-d08d-469c-b572-ee8b3e8ae4ec

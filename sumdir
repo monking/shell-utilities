@@ -10,36 +10,13 @@
 
 ## DOCUMENTATION:
 {
+  SCRIPT_VERSION=0.2.4;
+  SCRIPT_MODIFIED=2026-04-23;
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description);
   SCRIPT_EXAMPLES=()
   SCRIPT_EXAMPLES+=("sumdir -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
-  SCRIPT_VERSIONS=(
-    "0.2.3  @1776972889  Fix logic around including modified time. Omit sort (allow continuous output).  b2sum=13ec348f&size=19404" #nosum
-    "0.2.2  @1776735928  Allow adding metadata after arbitrary separator (default TAB); currently only modified time. Fix xargs.  b2sum=f343c91b&size=19278" #nosum
-    "0.2.1  @1776282812  Collect PATH args explicitly, rather than passing remainder parent args." #nosum
-    "0.2.0  @1772841283  Implement SHA256E sum. Abstract sha256sum polyfill.  b2sum=89819e44&size=16447" #nosum
-    "0.1.8  @1760374334  Refactor execution into main function. Repair & extend documentation.  b2sum=4f000838&size=15179" #nosum
-    "0.1.7  @1706565414  Add \`--\` before filenames, in case paths begin with \`-\`.  b2sum=59241fc0&size=13370" #nosum
-    "0.1.6  @1699561902  Template can contain output path. More documentation.  b2sum=6ef9ea3c&size=13289" #nosum
-    "0.1.5  @1697677091  Fallback to xargs for executing digest commands if parallel not found.  b2sum=fb9ebc12&size=12228&commit=9b8aeca" #nosum
-    "0.1.4  @1695831187  Improved documentation, esp. environment variables.  b2sum=ad161516&size=11916" #nosum
-    "0.1.3  @1681229730  Sort digest output by file path.  b2sum=af60835a&size=11528" #nosum
-    "0.1.2  @1670970402  Improving BSD/POSIX portability (Don't use perl, Support Bash 3.2.x).  b2sum=5252a8b4&b2_length=32&size=11500" #nosum
-    "0.1.1  @1669932673  Add '--length N' option (currently for b2sum only).  b2sum=f6a28dc2&b2_length=32&size=12099" #nosum
-    "0.1.0  @1669925986  Add '-a CMD' to choose sum command ('a' for 'algorithm', similar to 'shasum' command). Removed _OPT from env var names." #nosum
-    "0.0.9  @1669844764  Improve overriding options default + env + arg. (Some) defaults are now explicitly separate from the initial option value." #nosum
-    "0.0.8  @1669653009  Add support for multiple optional PATH arguments." #nosum
-    "0.0.7  @1666203994  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #nosum
-    "0.0.6  @1664219098  Adding SUMDIR_* env config. Put directory path in output file, with option '-l'." #nosum
-    "0.0.4  @1664178613  Exclude .git contents." #nosum
-    "0.0.3  @1664177599  '-r' To let find go deep; args after -- go to find." #nosum
-    "0.0.2  @1664175862  Added --exclude PATTERN option." #nosum
-    "0.0.1  @1664175274" #nosum
-  );
-  SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}";
-  SCRIPT_VERSION_NICE="v${SCRIPT_VERSION%%  *}";
 
   HEADER_IGNORE_STATEMENT="Metadata follows file paths, separated by: "
   HEADER_IGNORE_TAB_LABEL='Tab character "\t"'
@@ -191,7 +168,13 @@
         -X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
         --) shift; inputDirectories+=("$@"); shift $#; break;;
         --bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
-        --version) echo "${SCRIPT_VERSION_NICE} ($0)"; feedback 1 "${SCRIPT_VERSION#*  }" 2>&1; exit;;
+        --version)
+          if loglevel 1; then
+            echo "$(basename "$0") version ${SCRIPT_VERSION} (${SCRIPT_MODIFIED})"
+          else
+            echo "${SCRIPT_VERSION}"
+          fi
+          exit;;
         *) inputDirectories+=("$1");;
       esac
       shift;
@@ -277,7 +260,7 @@
 
       loglevel 1 && declare -p findArgs
       {
-        echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION_NICE}  (called as \`${SCRIPT_NAME} $(escapeArgs "${CALL_ARGS[@]}")\`)";
+        echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION}  (called as \`${SCRIPT_NAME} $(escapeArgs "${CALL_ARGS[@]}")\`)";
         if [[ -n $opt_column_sep ]]; then
           local colHeader=""
           colHeader+="# ${HEADER_IGNORE_STATEMENT}";
@@ -403,6 +386,9 @@
         feedback 0 "WARNING: Time metadata is only available with -a sha256e"
         opt_include_time=false
       fi
+    elif [[ $opt_include_time != true ]]; then
+      # If no metadata (currently time is the only metadata available), avoid adding metadata descriptive header.
+      opt_column_sep= # Not warning, as it is non-empty by default.
     fi
   }
 

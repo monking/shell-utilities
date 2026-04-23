@@ -1,6 +1,8 @@
 #!/bin/bash
 # Author: Christopher Lovejoy <c@lovejoy.io>
 
+SCRIPT_VERSION=0.2.4
+SCRIPT_MODIFIED=2026-04-23
 
 ## PLUMBING:
 
@@ -47,22 +49,6 @@ SCRIPT_OPTIONS=(
 SCRIPT_DESCRIPTION_LINES=(
   "If no SUMFILE is specified, .*SHA256SUM* and *SHA256SUM* is globbed in the current directory, and the newest one is used."
 )
-SCRIPT_VERSIONS=(
-  "0.2.3 @1776735365  Detect metadata ignore character from header.  b2sum=a6a921eb&size=8411" #nosum
-  "0.2.2 @1776439751  Allow checking sum files with extra data after file path.  b2sum=2f99f2f9&size=7360" #nosum
-  "0.2.1 @1776270798  Show check status count.  b2sum=210380c3&size=7070" #nosum
-  "0.2.0 @1772840859  Implement SHA256E.  b2sum=bae49c91&size=6804" #nosum
-  "0.1.1 @1735249838  Add 'ALG' to '-a' in help.   b2sum=52aa3a44&size=5484" #nosum
-  "0.1.0 @1720381791  Show progress (percent an count).   b2sum=14b0e4c8&size=5484" #nosum
-  "0.0.7 @1670970409  Support for Bash 3.2.x; require tr instead of perl.   sum:db71df2c#a=b2,l=32;size:4959" #nosum
-  "0.0.6 @1670954755  Added option -l to output selected SUM file path.   sum:8e5df517#a=b2,l=32;size:4800" #nosum
-  "0.0.5 @1670874600  Allow checking only existence of files from SUMFILE (opt '-e').   sum:a4a54a563924caca275b3626734ee015#a=b2,l=128;size:5205" #nosum
-  "0.0.4 @1669927062  Detect sum algorithm from sum filename (supported: '*B2*' => b2; all else => sha256)" #nosum
-  "0.0.3 @1666205166  BSD/macOS support (Bash 3.2, shasum -a 256). Tests PASS @1666203994 with GNU bash, version 3.2.57(1)-release (x86_64-apple-darwin20)" #nosum
-  "0.0.2 @1664215277  Added help." #nosum
-  "0.0.1 @1664175524" #nosum
-)
-SCRIPT_VERSION="${SCRIPT_VERSIONS[0]}"
 
 
 ## METHODS:
@@ -344,7 +330,13 @@ while [[ $# -gt 0 ]]; do
     -I) opt_ignoreAfter+="$2"; shift;;
     -l) getSumFile; exit;;
     -v) let opt_verbose++;;
-    --version) echo "v${SCRIPT_VERSION%%  *} ($0)"; exit;;
+    --version) 
+      if loglevel 1; then
+        echo "$(basename "$0") version ${SCRIPT_VERSION} (${SCRIPT_MODIFIED})";
+      else
+        echo "${SCRIPT_VERSION}";
+      fi
+      exit;;
     *) sumFileArgs+=("$1");;
   esac
   shift;
