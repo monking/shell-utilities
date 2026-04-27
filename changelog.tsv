@@ -1,4 +1,5 @@
 date	script	version	note	sum
+2026-04-24	sumdir	0.2.5	Use only basename to find extension (not path).	b2sum=873c77b2&size=19527
 2026-04-23	sumdir	0.2.4	External changelog.	b2sum=026c5def&size=19540
 2026-04-23	sumdir	0.2.3	Fix logic around including modified time. Omit sort (allow continuous output).	b2sum=13ec348f&size=19404
 2026-04-23	checkdir	0.2.4	External changelog.	b2sum=ed095017&size=8530

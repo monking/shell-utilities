@@ -10,8 +10,8 @@
 
 ## DOCUMENTATION:
 {
-  SCRIPT_VERSION=0.2.4;
-  SCRIPT_MODIFIED=2026-04-23;
+  SCRIPT_VERSION=0.2.5;
+  SCRIPT_MODIFIED=2026-04-24;
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description);
   SCRIPT_EXAMPLES=()
@@ -431,8 +431,8 @@
       basename="$(basename "$path")"
       size=($(du -L -b "$path")) || continue
       sum=($(sha256sum "$path")) || continue
-      ext="${path##*.}"
-      if [[ $ext == $path || $ext == $basename || ${#ext} -gt $maxExtlen ]]; then
+      ext="${basename##*.}"
+      if [[ $ext == $basename || ${#ext} -gt $maxExtlen ]]; then
         ext=''
       else
         ext=".${ext}"
