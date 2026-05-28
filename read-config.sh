@@ -1,7 +1,7 @@
 #!/bin/bash
 
-READ_CONFIG_VERSION=0.6.6
-READ_CONFIG_MODIFIED=2026-04-22
+READ_CONFIG_VERSION=0.7.0
+READ_CONFIG_MODIFIED=2026-05-28
 
 shopt -s extglob # For +() pattern matching (stripping indentation, mushing -vv together).
 read-config()
@@ -10,6 +10,7 @@ read-config()
   local catArgs=()
   local configComments=()
   local configNameBase=config
+  local declareOptions=()
   local key value
   local shouldUnsetFirst=false
   local verbose=0
@@ -32,6 +33,7 @@ read-config()
         shift
         ;;
       --context=*) activeContexts+="${1#--context=}";;
+      -g) declareOptions+=("$1");;
       -n)
         configNameBase="$2"
         shift
@@ -58,9 +60,9 @@ read-config()
       unset $configNameBase
     fi
   fi
-  declare -g -A $configNameBase
-  declare -a configHashes=($configNameBase)
-  declare -a configContexts=()
+  declare ${declareOptions[@]} -A $configNameBase
+  declare ${declareOptions[@]} -a configHashes=($configNameBase)
+  declare ${declareOptions[@]} -a configContexts=()
   local contextName= contextSuffix= isContextMatched=
 
   assignKey() {
@@ -115,7 +117,7 @@ read-config()
         done
         contextSuffix="_${contextName//[^[:alnum:]]/_}" # substitute underscores for non-alphanumeric characters
         [[ $shouldUnsetFirst == true ]] && unset "${configNameBase}${contextSuffix}"
-        eval "declare -g -A \"${configNameBase}${contextSuffix}\""
+        eval "declare ${declareOptions[@]} -A \"${configNameBase}${contextSuffix}\""
         configHashes+=("${configNameBase}${contextSuffix}")
         configContexts+=("$contextName")
         ;;
@@ -174,7 +176,7 @@ read-config()
 
 HELP_READ_CONFIG="$(cat <<'EOF_HELP'
 SUMMARY: Read config text into shell variables.
-USAGE: read-config [-c,--context=CONTEXT…] [-n,--name=NAME] [-f FILE] [-v…] [-h]
+USAGE: read-config [-c,--context=CONTEXT…] [-n,--name=NAME] [-g] [-f FILE] [-v…] [-h]
 BEHAVIOR, OPTIONS:
   If no NAME is specified, it defaults to 'config'.
   Associative arrays (hashes) are created:
