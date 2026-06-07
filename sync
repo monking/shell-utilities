@@ -29,7 +29,7 @@ showHelp()
 {
   echo "SYNOPSIS: Copies files from wherever a ${SYNC_CONF_PATTERN} file is found."
   echo
-  echo "USAGE: sync [-h|--help] [-n|--dry-run] [-y|--no-prompt] [-c CONTEXT] [-v[v…]|--verbose|-q|--quiet] [PATH]"
+  echo "USAGE: sync [-h|--help] [-n|--dry-run] [-y|--no-prompt] [-c CONTEXT] [-v[v…]|--verbose|-q|--quiet] [--CONTEXT…] [PATH]"
   echo
   echo "CONFIG (see shell-utilities/read-config.sh):"
   echo "  destination=PATH # Use '.' for moving within source directory"

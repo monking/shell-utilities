@@ -1,9 +1,10 @@
 #!/bin/bash
 
-READ_CONFIG_VERSION=0.6.6
-READ_CONFIG_MODIFIED=2026-04-22
+READ_CONFIG_VERSION=0.6.7
+READ_CONFIG_MODIFIED=2026-06-07
 
 shopt -s extglob # For +() pattern matching (stripping indentation, mushing -vv together).
+
 read-config()
 {
   local activeContexts=()
@@ -95,6 +96,19 @@ read-config()
   while read -r line
   do
     [[ $verbose -ge 2 ]] && >&2 echo "# [read-config] line: $line"
+    if [[ -n $isAppendingToKey ]]
+    then
+      key="$isAppendingToKey"
+      value="${line#+([[:space:]])}"
+      if [[ $value =~ \\$ ]]
+      then
+        value="${value%\\}"
+      else
+        isAppendingToKey=
+      fi
+      assignKey --append "$key" "$value" # trim leading spaces
+      continue
+    fi
     case $line in
       '') continue;;
       *([[:space:]])\#*) configComments+=("$line");;
@@ -131,21 +145,7 @@ read-config()
         fi
         assignKey "$key" "$value"
         ;;
-      *)
-        if [[ -n $isAppendingToKey ]]
-        then
-          key="$isAppendingToKey"
-          value="${line#+([[:space:]])}"
-          if [[ $value =~ \\$ ]]
-          then
-            value="${value%\\}"
-          else
-            isAppendingToKey=
-          fi
-          assignKey --append "$key" "$value" # trim leading spaces
-        else
-          configComments+=("$line")
-        fi
+      *) configComments+=("$line");;
     esac
   done <<<"$(cat "${catArgs[@]}")"
 
