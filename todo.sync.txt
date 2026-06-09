@@ -2,6 +2,7 @@
 (B) 2026-03-11 +decide What to do with nested configs? Should that be detected, and then maybe run the deeper one first? Or exclude the inner one, as git does by default?  uuid:7f4c5fee-d04e-4422-969b-b63620e8a2bd
 (B) 2026-03-11 Take multiple PATH…; find config files into array, use that array for executing commands, rather than find -exec; abstract into functions (#8b304e92).  complexity:3 uuid:5a4034ab-3fb1-4bfa-bfc1-7b9ef4a6a77b
 (B) 2026-03-20 Use `mv` instead of `rsync` as appropriate, to enable moving files over MTP (e.g. mobile by USB).  uuid:a2a69a46-9b09-48f1-954c-f3ce3bf6afa3 related:11b7a3de-391f-49f6-a7ab-de6ece6f1f42
+(B) 2026-06-07 Forward CONTEXT for postprocess calls to sync in other directories.  uuid:f2280cc7-d881-4a46-b5a1-5c2b32443560
 (C) 2026-03-12 +decide Should I add a 'method' config key? Values 'rsync' (default), 'git-annex' (implies 'move', or 'copy' if 'keepcopy' is true).  uuid:11b7a3de-391f-49f6-a7ab-de6ece6f1f42
 (C) 2026-03-12 Portable canonicalize path; shell-utilities/canon, after .
 (C) 2026-04-01 +decide Should there be a 'preprocess', as well? e.g. `[[ -f playlist.url ]] && yt-dlp "$(cat playlist.url)"`
