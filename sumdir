@@ -466,10 +466,11 @@
 
       basename="$(basename "$path")"
 
-      size=($(du -L -b "$path")) || continue
+      size=($(du -L -b "$path")) || continue # LATER Honor opt_should_dereference  uuid: 23d2b673-c60b-4476-80eb-302869e8fedd
 
       if [[ $getKeyReferenceContents == true && $size -lt $MAX_KEY_LENGTH ]]
       then
+        # LATER Also handle symlink key references  uuid:c79db6fa-5d82-4459-9011-c02f1274d7b4
         key="$(cat "$path" | sed 's/^.*\///')"
         if [[ $key =~ $PATTERN_SHA256E ]] then
           key="${KEY_REF_PREFIX}${key}"
