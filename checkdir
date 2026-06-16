@@ -1,8 +1,9 @@
 #!/bin/bash
 # Author: Christopher Lovejoy <c@lovejoy.io>
 
-SCRIPT_VERSION=0.2.4
-SCRIPT_MODIFIED=2026-04-23
+SCRIPT_NAME=checkdir
+SCRIPT_VERSION=0.3.0
+SCRIPT_MODIFIED=2026-06-16
 
 ## PLUMBING:
 
@@ -66,6 +67,8 @@ showHelp() {
   for line in "${SCRIPT_DESCRIPTION_LINES[@]}"; do
     echo "  ${line}"
   done
+  echo
+  echo "${SCRIPT_NAME} version ${SCRIPT_VERSION} (${SCRIPT_MODIFIED})"
 }
 
 confirm() {
@@ -130,7 +133,7 @@ getSumFile() {
 }
 
 countFilesInSumFile() {
-  grep -Ecv '^\s*(#.*)\s*$' "$1";
+  grep -Ecv '^\s*#' "$1";
 }
 
 describeIgnoreAfter() {
@@ -162,7 +165,9 @@ describeSumFile() {
 }
 
 checksumSHA256E() {
-  local sumfile path basename size sum ext baseKey status
+  local sumfile path basename size sum ext baseKey
+  local status # <enum:'OK','FAILED','REF'>
+  local MAX_KEY_LENGTH=300
   while [[ $# -gt 0 ]]; do
     case $1 in
       --|--check) shift; continue;;
@@ -172,7 +177,11 @@ checksumSHA256E() {
   done
   local readOpts=(-r)
   while read "${readOpts[@]}" key path; do
-    [[ $key =~ ^\s*# ]] && continue;
+    [[ $key =~ ^\s*# ]] && continue; # comment
+    if [[ ${key:0:1} == '*' ]]; then
+      status=REF
+      key="${key#\*}"
+    fi
     if [[ -n $opt_ignoreAfter ]]; then
       path="${path%%${opt_ignoreAfter}*}"
     fi
@@ -185,6 +194,10 @@ checksumSHA256E() {
       baseKey="SHA256E-s${size[0]}--${sum[0]}"
       if [[ ${key:0:${#baseKey}} == $baseKey ]]; then
         status=OK;
+      elif [[ $status == REF && $size -lt $MAX_KEY_LENGTH ]] \
+        && grep -qF "$key" "$path"
+      then
+        status='REFerence to file not present'
       else
         status=FAILED;
       fi
@@ -297,14 +310,15 @@ main() {
     yell "$failedLines";
     yell "";
     yell "${failedLineCount} of ${fileCount} files failed checks ($((100 * (fileCount - failedLineCount) / fileCount))% OK)";
-    [[ -t 0 ]] \
-      && confirm "See full output?" 'n' \
-      && cat <(echo "### output from '${checkCommand[*]}':") "$checkOutputCacheFile" <(echo -e "\n### sum file data being checked:") "$sumFile" | less
   elif [[ $checkStatus != 0 ]]; then
     yell "✗ Finished with problems.";
   else
     yell "✓ All OK ($fileCount files)";
   fi
+
+  [[ -t 0 ]] \
+    && confirm "See full output?" 'n' \
+    && cat <(echo "### output from '${checkCommand[*]}':") "$checkOutputCacheFile" <(echo -e "\n### sum file data being checked:") "$sumFile" | less
 
   [[ -e "$checkOutputCacheFile" ]] && rm "$checkOutputCacheFile"
 

@@ -10,31 +10,31 @@
 
 ## DOCUMENTATION:
 {
-  SCRIPT_VERSION=0.2.5;
-  SCRIPT_MODIFIED=2026-04-24;
+  SCRIPT_NAME=sumdir
+  SCRIPT_VERSION=0.3.0
+  SCRIPT_MODIFIED=2026-06-16
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
-  SCRIPT_EXAMPLE_COLUMNS=(script description);
+  SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
-  SCRIPT_EXAMPLES+=("sumdir -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
+  SCRIPT_EXAMPLES+=("${SCRIPT_NAME} -r -o ./externalDrive-%d /mnt/externalDrive" "Sum files from a different location, and save output in the current directory.")
   SCRIPT_PURPOSE="Coordinates the generation and output of many checksums."
 
   HEADER_IGNORE_STATEMENT="Metadata follows file paths, separated by: "
   HEADER_IGNORE_TAB_LABEL='Tab character "\t"'
 
-  g_IFS="$IFS"
-  export g_IFS
-
   showHelp() {
     echo "USAGE: $SCRIPT_USAGE";
     echo "PURPOSE: $SCRIPT_PURPOSE";
-    echo "";
+    echo
     echo "OPTIONS:";
     SCRIPT_OPTIONS=(
       "-h, --help, help"
       "    Show this help"
       ""
       "-a CMD"
-      "    Hashing algorithm to use. Currently supported: 'sha256', 'b2', 'sha256e' (alias 'annex'). env: SUMDIR_ALGORITHM."
+      "    Hashing algorithm to use. Currently supported:"
+      "    'sha256', 'b2', 'sha256e' (alias 'annex')."
+      "    env: SUMDIR_ALGORITHM."
       ""
       "-r                "
       "    Recurse into directory. env: SUMDIR_SHOULD_RECURSE"
@@ -43,40 +43,62 @@
       "    Dereference (follow) symlinks. env: SUMDIR_SHOULD_DEREFERENCE"
       ""
       "-1, --single"
-      "    Remove existing *SUM* SUMFILEs in this directory (trash-cli, falls back to rm). Only this directory, even with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
+      "    Remove existing *SUM* SUMFILEs in this directory"
+      "    (trash-cli, falls back to rm). Only this directory, even"
+      "    with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
       ""
       "-o, --out TEMPLATE"
-      "    Output file name template. See 'TEMPLATES' below for substitution patterns. env: SUMDIR_OUTPUT_FILE_TEMPLATE"
+      "    Output file name template."
+      "    See 'TEMPLATES' below for substitution patterns."
+      "    env: SUMDIR_OUTPUT_FILE_TEMPLATE"
       ""
       "-l                "
-      "    hostname and PWD in output SUMFILE. Affected by -L. env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
+      "    hostname and PWD in output SUMFILE."
+      "    Affected by -L."
+      "    env: SUMDIR_SHOULD_INCLUDE_LOCATION_IN_OUTPUT"
       ""
       "-z, --tz TZ"
-      "    Set timezone for timestamp; default 'UTC'. env: SUMDIR_TIMEZONE"
+      "    Set timezone for timestamp; default 'UTC'."
+      "    env: SUMDIR_TIMEZONE"
       ""
       "-f, --dateformat"
-      "    Set format for timestamp (per GNU coreutils date). env: SUMDIR_DATE_FORMAT"
+      "    Set format for timestamp (per GNU coreutils date)."
+      "    env: SUMDIR_DATE_FORMAT"
       ""
       "-v, --verbose[=N]  "
-      "    Increase the detail of the info output to STDERR. env: SUMDIR_VERBOSE"
+      "    Increase the detail of the info output to STDERR."
+      "    env: SUMDIR_VERBOSE"
       ""
       "-x, --exclude PATTERN"
-      "    Exclude files by name, via \`find \\! -name PATTERN\`. env: SUMDIR_LIST_EXCLUDE_NAME"
+      "    Exclude files by name, via \`find \\! -name PATTERN\`."
+      "    env: SUMDIR_LIST_EXCLUDE_NAME"
       ""
       "-X, --exclude-path PATTERN"
-      "    Exclude files by name, per \`find \\! -path PATTERN\`; usually of form '*PATTERN*'. env: SUMDIR_LIST_EXCLUDE_PATH"
+      "    Exclude files by name, per \`find \\! -path PATTERN\`;"
+      "    usually of form '*PATTERN*'."
+      "    env: SUMDIR_LIST_EXCLUDE_PATH"
+      ""
+      "--length N        "
+      "     (b2sum only) Set the length of the digest hash in bits."
+      "     Hashes appear 1/4 this length in hexadecimal"
+      "      (e.g --length 128 yields a has 32 characters long)."
+      "     Default and maximum is 512 (for an output 128 chars long)."
+      "     This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
       ""
       "--time"
       "    (Only with -a sha256e) Add modified time after filename after DELIM."
       ""
       "-d DELIM"
-      "    (Only with -a sha256e) Set metadata separator string to DELIM. Defaults to '\\t' Tab character."
+      "    (Only with -a sha256e) Set metadata separator string to DELIM."
+      "    Defaults to '\\t' Tab character."
       ""
-      "--length N        "
-      "     (b2sum only) Set the length of the digest hash in bits."
-      "     Hashes appear 1/4 this length in hexadecimal (e.g --length 128 yields ."
-      "     Default and maximum is 512 (for an output 128 chars long)."
-      "     This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
+      "--no-key-ref"
+      "    (Only with -a sha256e) Treat all files the same;"
+      "     don't look for SHA256E keys in small files."
+      "    By default, small files containing keys have their"
+      "    keys printed with a '*' prefix."
+      "    Handled in ${SCRIPT_NAME} and checkdir versions +0.3.0."
+      ""
       "--"
       "    After this, all further arguments are passed directly to 'find'."
       ""
@@ -90,7 +112,7 @@
     for opt in "${SCRIPT_OPTIONS[@]}"; do
       echo "  ${opt}"
     done
-    echo "";
+    echo
     echo "DESCRIPTION:";
     SCRIPT_DESCRIPTION_LINES=(
       "If no PATH is specified, the current directory (\$PWD) is used."
@@ -120,7 +142,7 @@
         && echo -n "='${defaultValue}'";
       echo; # newline
     done
-    echo "";
+    echo
     echo "EXAMPLES:";
     local exampleIndex=0;
     local exampleColumnCount=${#SCRIPT_EXAMPLE_COLUMNS[@]};
@@ -136,6 +158,8 @@
       fi
       let 'exampleIndex++';
     done
+    echo
+    echo "${SCRIPT_NAME} version ${SCRIPT_VERSION} (${SCRIPT_MODIFIED})"
   }
 }
 
@@ -148,26 +172,27 @@
 
     while [[ $# -gt 0 ]]; do
       case "$1" in
-        -h|--help|help) showHelp | less; exit;;
-        -a) opt_algorithm="$2"; shift;;
-        -r) opt_should_recurse=true;;
-        -L) opt_should_dereference=true;;
+        --) shift; inputDirectories+=("$@"); shift $#; break;;
+        --bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
+        --length) opt_list_b2_opts+=(--length $2); shift;;
+        --no-key-refs) opt_should_handle_key_refs=false;;
+        --time) opt_include_time=true;;
+        --verbose=*) opt_verbose=${1#*=};;
         -1|--single) opt_should_single_hash_file=true;;
-        -o|--out) opt_output_file_template="$2"; shift;;
-        -l) opt_should_include_location_in_output=true;;
-        -z|--tz) opt_timezone="$2"; shift;;
+        -a) opt_algorithm="$2"; shift;;
+        -d) opt_column_sep="$2"; shift;;
         -f|--dateformat) opt_date_format="$2"; shift;;
+        -h|--help|help) showHelp | less; exit;;
+        -L) opt_should_dereference=true;;
+        -l) opt_should_include_location_in_output=true;;
+        -o|--out) opt_output_file_template="$2"; shift;;
+        -r) opt_should_recurse=true;;
         -vv) let opt_verbose+=2;;
         -vvv) let opt_verbose+=3;;
         -v|--verbose) let opt_verbose++;;
-        --verbose=*) opt_verbose=${1#*=};;
-        --length) opt_list_b2_opts+=(--length $2); shift;;
-        --time) opt_include_time=true;;
-        -d) opt_column_sep="$2"; shift;;
         -x|--exclude) opt_list_exclude_name+=("$2"); shift;;
         -X|--exclude-path) opt_list_exclude_path+=("$2"); shift;;
-        --) shift; inputDirectories+=("$@"); shift $#; break;;
-        --bk) opt_output_file_template="$OPT_OUTPUT_FILE_TEMPLATE_BK";;
+        -z|--tz) opt_timezone="$2"; shift;;
         --version)
           if loglevel 1; then
             echo "$(basename "$0") version ${SCRIPT_VERSION} (${SCRIPT_MODIFIED})"
@@ -196,6 +221,7 @@
     local cwd="$PWD";
     local outputFilePath;
     for dir in "${inputDirectories[@]}"; do
+      dir="${dir%/}" # Remove trailing slash from directory paths.
       while [[ $dStackHeight -gt 0 ]]; do
         popd &>/dev/null \
           && let dStackHeight--;
@@ -227,6 +253,7 @@
       else
         outputFilePath="${dir}/${outputFilename}";
       fi
+      feedback 0 "Outputting to: ${outputFilePath}";
 
       local findArgs=();
       if [[ $opt_should_dereference == true ]]; then
@@ -294,7 +321,7 @@
         # LATER Sort file list by path (`sort -k2`). todo.sumdir.txt#a0a942a5-d08d-469c-b572-ee8b3e8ae4ec
       } > "${outputFilePath}";
       local sumStatus=$?;
-      feedback 0 "Generated ${outputFilePath}";
+      feedback 0 "Generated: ${outputFilePath}";
 
       if [[ $sumStatus != 0 ]]; then
         exit $sumStatus;
@@ -345,6 +372,7 @@
           die "Missing checksum software: sha256sum or shasum.";
         fi
         sumCommand=(sumSHA256E);
+        [[ $opt_should_handle_key_refs == false ]] && sumCommand+=(--no-key-refs);
         checkCommand=(checkdir);
         ;;
       sha*) opt_algorithm=sha256;
@@ -418,26 +446,63 @@
   }
 
   sumSHA256E() {
-    local parseArgs=true path basename size sum ext maxExtlen=10
+    local parseArgs=true path basename size sum ext extWIP getKeyReferenceContents=true
+    local PATTERN_SHA256E='^SHA256E-s[0-9]+--[0-9a-f]{64}(\.[^.]{1,8}){0,2}$'
+    local MAX_KEY_LENGTH=300
+    local MAX_EXTENSION_LENGTH=10
+    local KEY_REF_PREFIX='*'
+
     while [[ $# -gt 0 ]]; do
-      if [[ $parseArgs == true && $1 == '--' ]]; then
-        shift;
-        parseArgs=false;
-        continue;
+      if [[ $parseArgs == true ]]; then
+        case $1 in
+          --no-key-refs) getKeyReferenceContents=false; shift; continue;;
+          --) parseArgs=false; shift; continue;;
+        esac
       fi
+
       path="$1"
       shift
       [[ -n $path ]] || continue
+
       basename="$(basename "$path")"
+
       size=($(du -L -b "$path")) || continue
-      sum=($(sha256sum "$path")) || continue
-      ext="${basename##*.}"
-      if [[ $ext == $basename || ${#ext} -gt $maxExtlen ]]; then
-        ext=''
-      else
-        ext=".${ext}"
+
+      if [[ $getKeyReferenceContents == true && $size -lt $MAX_KEY_LENGTH ]]
+      then
+        key="$(cat "$path" | sed 's/^.*\///')"
+        if [[ $key =~ $PATTERN_SHA256E ]] then
+          key="${KEY_REF_PREFIX}${key}"
+          loglevel 3 && >&2 echo "# $(declare -p key path)"
+        else
+          key=
+        fi
       fi
-      echo "SHA256E-s${size[0]}--${sum[0]}${ext}  ${path}"
+
+      if [[ -z $key ]]
+      then
+        sum=($(sha256sum "$path")) || continue
+
+        ext="${basename#*.}"
+        if [[ $ext == $basename ]] then
+          ext=''
+        else
+          while [[ ${#ext} -gt $MAX_EXTENSION_LENGTH ]]; do
+            extWIP="${ext#*.}"
+            if [[ $extWIP != $ext ]]
+            then
+              ext="$extWIP"
+            else
+              ext=
+            fi
+          done
+          [[ -n $ext ]] && ext=".${ext}"
+        fi
+
+        key="SHA256E-s${size[0]}--${sum[0]}${ext}"
+      fi
+
+      echo "${key}  ${path}"
     done
   }
   export -f sumSHA256E
@@ -475,6 +540,9 @@
 
 ## PLUMBING:
 {
+  g_IFS="$IFS"
+  export g_IFS
+
   die() { feedback 0 "$@"; exit 111; }; export -f die;
   must() { "$@" || die "cannot $*"; }; export -f must;
   loglevel() { [[ $opt_verbose -ge $1 ]] }; export -f loglevel;
@@ -554,6 +622,7 @@
   DEFAULT_ALGORITHM='sha256';
   DEFAULT_COLUMN_SEP='\t';
   DEFAULT_DATE_FORMAT='+%Y%m%dT%H%M%SZ';
+  DEFAULT_SHOULD_HANDLE_KEY_REFS=true;
   DEFAULT_INCLUDE_TIME=false;
   DEFAULT_LIST_EXCLUDE_NAME='.DS_Store:.thumbnails';
   DEFAULT_LIST_EXCLUDE_PATH='*/.git/*:*/node_modules/*';
@@ -571,6 +640,7 @@
   opt_algorithm
   opt_column_sep
   opt_date_format
+  opt_should_handle_key_refs
   opt_include_time
   opt_list_b2_opts
   opt_list_exclude_name
