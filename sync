@@ -1,53 +1,73 @@
 #!/bin/bash
-SCRIPT_VERSION=0.7.0
+
+SCRIPT_VERSION=0.7.1
 SCRIPT_MODIFIED=2026-05-20
 SCRIPT_UUID=60dffac9-3444-41bb-bdf6-c9c63cdee89d
-#SYNC_CONF_FILENAME='.sync.conf'
-SYNC_CONF_PATTERN='.sync*.conf'
+
 SCRIPT_PATH="$0"
 [[ -L "$SCRIPT_PATH" ]] && SCRIPT_PATH="$(readlink --canonicalize "$SCRIPT_PATH")" # Allow linking, but find original for dependencies and tasks. FIXME: Assuming GNU readlink.
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 PATH_SOURCE_READ_CONF="$SCRIPT_DIR/read-config.sh"
+
+#SYNC_CONF_FILENAME='.sync.conf'
+SYNC_CONF_PATTERN='.sync*.conf'
+
 oIFS="$IFS"
-shopt -s extglob
-declare -A opt
-opt[ASSUMEYES]=0
-opt[BASE]="$PWD"
-opt[DRYRUN]=FALSE
-opt[POSTPROCESS]=TRUE
-opt[SHOWHELP]=0
-opt[VERBOSE]=0
 [[ -z $HOSTNAME ]] && command -v hostname &>/dev/null && export HOSTNAME="$(hostname)"
+
+shopt -s extglob
+
+opt_assumeyes=0
+opt_base=()
+opt_dryrun=FALSE
+opt_postprocess=TRUE
+opt_showhelp=0
+opt_verbose=0
+
 userContexts=()
 userContexts+=("host.$HOSTNAME")
 
-isdry() { [[ ${opt[DRYRUN]} == TRUE ]]; }
-loglevel() { [[ ${opt[VERBOSE]} -ge $1 ]]; }
+isdry() { [[ ${opt_dryrun} == TRUE ]]; }
+loglevel() { [[ ${opt_verbose} -ge $1 ]]; }
 feedback() { loglevel $1 || return; shift; >&2 echo "$@"; }
+
 showHelp()
 {
   echo "SYNOPSIS: Copies files from wherever a ${SYNC_CONF_PATTERN} file is found."
   echo
-  echo "USAGE: sync [-h|--help] [-n|--dry-run] [-y|--no-prompt] [-c CONTEXT] [-v[v…]|--verbose|-q|--quiet] [--CONTEXT…] [PATH]"
+  echo "USAGE: sync [-h|--help] [-n|--dry-run] [-y|--no-prompt] [-c CONTEXT] [-v[v…]|--verbose|-q|--quiet] [--CONTEXT…] [PATH…]"
+  echo
+  echo "PATH arguments:"$'\t'"directory to search for ${SYNC_CONF_PATTERN} files."
+  echo $'\t\t'"Defaults to \$PWD."
   echo
   echo "CONFIG (see shell-utilities/read-config.sh):"
-  echo "  destination=PATH # Use '.' for moving within source directory"
-  echo "  subdir=DATEFORMAT # Ignored if destination is empty"
-  echo "  exclude=PATTERN or ('PATTERN'…) # Applies before include (*regardless of CONFIG line order)"
-  echo "  include=PATTERN or ('PATTERN'…) # Applies after exclude (^*)"
-  echo "  keepcopy=true|false # Defaults to true"
-  echo "  postprocess=COMMAND # Run in the config directory. \$1 is the destination directory, or the source directory if no destination is defined. Runs after all sync operations."
-  echo "  [CONTEXT] # per -c CONTEXT; [host.\$HOSTNAME]] is provided automatically."
+  echo "  destination=PATH"
+  echo $'\t'"# Empty PATH or '.' refers to source directory."
+  echo "  subdir=DATEFORMAT"
+  echo $'\t'"# Ignored if destination is empty."
+  echo "  exclude=PATTERN or ('PATTERN'…)"
+  echo $'\t'"# Applies before include (*regardless of CONFIG line order)."
+  echo "  include=PATTERN or ('PATTERN'…)"
+  echo $'\t'"# Applies after exclude (^*)."
+  echo "  keepcopy=true|false"
+  echo $'\t'"# Defaults to true."
+  echo "  postprocess=COMMAND"
+  echo $'\t'"# Run COMMAND in the config directory."
+  echo $'\t'"# Runs after all sync operations."
+  echo $'\t'"# \$1 is the destination directory, or the source directory if no destination is defined."
+  echo "  [CONTEXT]"
+  echo $'\t'"# Begin conditional section, per -c CONTEXT."
   echo
   echo "NOTE: Only one value is assigned per key in the CONFIG. Multiples overwrite earlier values."
   echo " Some keys (include, exclude) are evaluated to support arrays, like key=('a' 'b')."
   echo
   echo "OPTIONS:"
-  echo "  PATH  Path to directory to search for ${SYNC_CONF_PATTERN} files. Defaults to \$PWD."
   echo "  -c CONTEXT, --CONTEXT"$'\t'"Add CONTEXT for read-config. Can be used multiple times."
+  echo $'\t\t\t'"CONTEXT of \`[host.\$HOSTNAME]\` is provided automatically."
   echo "  -h,--help"$'\t\t'"Show this help."
-  echo "  -n,--dry-run"$'\t\t'"Make no changes, move no files. Find ${SYNC_CONF_PATTERN} files, and print commands. Implies -y."
+  echo "  -n,--dry-run"$'\t\t'"Make no changes, move no files. Finds ${SYNC_CONF_PATTERN} files,"
+  echo $'\t\t\t'"and prints commands. Implies -y."
   echo "  -y,--no-prompt"$'\t'"Begin syncing without prompting the user first."
   echo "  -P,--no-post"$'\t\t'"Skip any configured postprocessing steps."
   echo "  -v,--verbose"$'\t\t'"Show more info. Can be used multiple times."
@@ -70,48 +90,48 @@ while [[ $# -gt 0 ]]
 do
   case $1 in
     -h|--help)
-      opt[SHOWHELP]=TRUE
+      opt_showhelp=TRUE
       ;;
     -n|--dry-run)
-      opt[DRYRUN]=TRUE
-      opt[ASSUMEYES]=1
+      opt_dryrun=TRUE
+      opt_assumeyes=1
       ;;
     -+(v))
-      let "opt[VERBOSE] += ${#1} - 1"
+      let "opt_verbose += ${#1} - 1"
       ;;
     --verbose)
-      let opt[VERBOSE]++
+      let opt_verbose++
       ;;
     -y|--no-prompt)
-      opt[ASSUMEYES]=1
+      opt_assumeyes=1
       ;;
     -q|--quiet)
-      opt[VERBOSE]=-1
+      opt_verbose=-1
       ;;
     -c)
       userContexts+=("$2")
       shift
       ;;
     -P|--no-post)
-      opt[POSTPROCESS]=FALSE
+      opt_postprocess=FALSE
       ;;
     -d) # sunset 2026-03-13/2026-06
-      opt[BASE]="$2"
+      opt_base+=("$2")
       shift
       ;;
     --*)
       userContexts+=("${1#--}")
       ;;
     *)
-      opt[BASE]="$1"
+      opt_base+=("$1")
       ;;
   esac
   shift
 done
 
-feedback 1 "# [${SCRIPT_NAME}] Log level: ${opt[VERBOSE]}"
+feedback 1 "# [${SCRIPT_NAME}] Log level: ${opt_verbose}"
 
-if [[ ${opt[SHOWHELP]} == TRUE ]]
+if [[ ${opt_showhelp} == TRUE ]]
 then
   showHelp
   exit
@@ -125,7 +145,7 @@ then
 fi
 
 baseFindArgs=()
-baseFindArgs+=("${opt[BASE]}" -name "$SYNC_CONF_PATTERN")
+baseFindArgs+=("${opt_base[@]}" -name "$SYNC_CONF_PATTERN")
 feedback 0 "Finding sync config files:"
 feedback 2 "# [${SCRIPT_NAME}] $ find ${baseFindArgs[*]} -print0"
 configPaths=()
@@ -149,7 +169,7 @@ fi
 
 # TODO Parse config before prompting, not only ^ displaying config text.  todo.sync.txt#8b304e92
 
-if [[ ${opt[ASSUMEYES]} -le 0 ]]
+if [[ ${opt_assumeyes} -le 0 ]]
 then
   read -p "Proceed to sync these directories? (Y/n): " \
     && [[ -z $REPLY || $REPLY =~ ^[Yy] ]] \
@@ -234,7 +254,7 @@ syncFindArgs+=(-execdir bash -c "$syncCommand" \;) # NOTE sync will be no-op if 
 find "${syncFindArgs[@]}"
 
 
-if [[ ${opt[POSTPROCESS]} == TRUE ]]
+if [[ ${opt_postprocess} == TRUE ]]
 then
   #postprocessCommand+="SCRIPT_NAME=\"${SCRIPT_NAME}\"; "
   loglevel 2 && postprocessCommand+='declare -p PWD; '
