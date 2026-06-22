@@ -1,1 +1,1 @@
-(B) 2026-06-17 Enable adding to a value in subsequent definitions (e.g. '[transcribe]\n  postprocess+=transcribe …;').  uuid:d7a11925-bab3-47e5-ace9-3a629095d9e0
+x 2026-06-19 2026-06-17 Enable adding to a value in subsequent definitions (e.g. '[transcribe]\n  postprocess+=transcribe …;').  | 'k+=v' will add a **new line** to k before the appending v (w:2026-06-19).  uuid:d7a11925-bab3-47e5-ace9-3a629095d9e0  v:0.7.0 pri:B

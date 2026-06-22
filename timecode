@@ -1,4 +1,5 @@
 #!/bin/bash
+# canBeSourced=true
 ## CONSTANTS:
 {
   export TCSCRIPT_VERSION=0.2.2

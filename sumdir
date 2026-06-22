@@ -11,8 +11,8 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.0
-  SCRIPT_MODIFIED=2026-06-16
+  SCRIPT_VERSION=0.3.1
+  SCRIPT_MODIFIED=2026-06-19
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
@@ -321,10 +321,13 @@
         # LATER Sort file list by path (`sort -k2`). todo.sumdir.txt#a0a942a5-d08d-469c-b572-ee8b3e8ae4ec
       } > "${outputFilePath}";
       local sumStatus=$?;
-      feedback 0 "Generated: ${outputFilePath}";
+      loglevel 0 && {
+        >&2 echo -n "Generated: ";
+        echo "${outputFilePath}"; # Output path, for scripting
+      }
 
       if [[ $sumStatus != 0 ]]; then
-        exit $sumStatus;
+        die $sumStatus "Sum failed."$'\n'"$(declare -p sumCommand)";
       fi
     done
   }
@@ -369,7 +372,7 @@
     case "$(echo -n "$opt_algorithm" | toLowerCase)" in
       sha256e|*annex) opt_algorithm=sha256e;
         if ! command -v sha256sum &>/dev/null; then
-          die "Missing checksum software: sha256sum or shasum.";
+          die 1 "Missing checksum software: sha256sum or shasum.";
         fi
         sumCommand=(sumSHA256E);
         [[ $opt_should_handle_key_refs == false ]] && sumCommand+=(--no-key-refs);
@@ -377,7 +380,7 @@
         ;;
       sha*) opt_algorithm=sha256;
         if ! command -v sha256sum &>/dev/null; then
-          die "Missing checksum software: sha256sum or shasum.";
+          die 1 "Missing checksum software: sha256sum or shasum.";
         fi
         sumCommand=(sha256sum);
         checkCommand=("${sumCommand[@]}" -c);
@@ -392,7 +395,7 @@
           sumCommand+=("${opt_list_b2_opts[@]}");
         fi
         ;;
-      *) die "Unknown sum algorithm '${opt_algorithm}'. Aborting for safety.";;
+      *) die 1 "Unknown sum algorithm '${opt_algorithm}'. Aborting for safety.";;
     esac
 
     sumCommand+=(--); # no more options, in case filenames/paths begin with `-`.
@@ -404,7 +407,7 @@
     if command -v "${sumCommand[0]}" &>/dev/null; then
       feedback 1 "Using $(which "${sumCommand[0]}")";
     else
-      die "Missing selected checksum software: ${sumCommand[0]}.";
+      die 1 "Missing selected checksum software: ${sumCommand[0]}.";
     fi
     algoUpper="$(echo "$opt_algorithm" | toUpperCase)";
 
@@ -426,7 +429,7 @@
     elif command -v xargs &>/dev/null; then
       jobExecutor=(xargsNulWrapper);
     else
-      die "Missing parallel and xargs.";
+      die 1 "Missing parallel and xargs.";
       return 1
     fi;
     if [[ $opt_include_time == true ]]; then
@@ -544,8 +547,8 @@
   g_IFS="$IFS"
   export g_IFS
 
-  die() { feedback 0 "$@"; exit 111; }; export -f die;
-  must() { "$@" || die "cannot $*"; }; export -f must;
+  die() { local status=$1; shift; feedback 0 "$@"; exit $status; }; export -f die;
+  must() { "$@" || die $? "cannot $*"; }; export -f must;
   loglevel() { [[ $opt_verbose -ge $1 ]] }; export -f loglevel;
   feedback() { loglevel $1 || return; shift; >&2 echo "$@"; }; export -f feedback;
 
