@@ -1,3 +1,4 @@
+(A) 2026-06-26 When generating the key, use only the last extension, unless… git-annex-calckey also includes more? But sometimes even then. +needs-examples  uuid:8e642732-3ea7-45a5-bc21-cd26f150a99d
 (B) 2026-04-20 Don't create an output file if it will be empty of paths.  uuid:31233d16-bc32-4348-a041-c6aad5fad494
 (B) 2026-06-16 +LATER Also handle symlink key references, with missing referrant, in the same way as a key reference file.  uuid:c79db6fa-5d82-4459-9011-c02f1274d7b4
 (B) 2026-06-16 +LATER Honor opt_should_dereference in sumSHA256E(), size calculation.  uuid: 23d2b673-c60b-4476-80eb-302869e8fedd
