@@ -1,0 +1,191 @@
+#!/bin/bash
+# ---
+# dateCreated: 2026-03-31T20:20:18.522131017Z
+# uuid: 3423dd9c-2fb0-4e1a-b219-c7551704336a
+# related:
+#   - git-annex-inject (bed1c3eb-261c-4915-beea-99424492515b)
+# ...
+
+SCRIPT_VERSION=0.2.0
+SCRIPT_NAME=find-key
+SCRIPT_SUMMARY="find a file by size and checksum"
+SCRIPT_USAGE="${SCRIPT_NAME} [-v] [-h] [[-d DIR]…] [-z|-f FMT] [--sumfile=PATH [--backup[=CONTROL]] | KEY…]"
+SCRIPT_MODIFIED=2026-06-26
+
+opt_verbose=0
+opt_cpArgs=()
+findFirstOptions=()
+findLastOutputArgs=(-print)
+oIFS="$IFS"
+
+findKey()
+{
+  local startingPoints=()
+  local sumFile
+  local keys=()
+  while [[ $# -gt 0 ]]
+  do
+    case $1 in
+      -h|--help) help_findKey; exit;;
+      -L) findFirstOptions+=("$1");;
+      -d) startingPoints+=("$2"); shift;;
+      -v|-vv|-vvv) ((opt_verbose += ${#1} - 1));;
+      --verbose) ((opt_verbose++));;
+      --sumfile) sumFile="$(ls -t .SUMSHA256E* 2>/dev/null | head -1)";;
+      --sumfile=*) sumFile="${1#*=}";;
+      --backup*) opt_cpArgs=("$1");;
+      -z) findLastOutputArgs=(-print0);;
+      -f) findLastOutputArgs=(-printf "$2"); shift;;
+      *) keys+=("$1");;
+    esac
+    shift
+  done
+  [[ ${#startingPoints[@]} -eq 0 ]] && startingPoints+=("$PWD")
+  feedback 1 "Log level: ${opt_verbose}"
+  loglevel 2 && >&2 declare -p findFirstOptions startingPoints findLastOutputArgs keys
+
+  if [[ -n $sumFile ]]
+  then
+    injectBySumFile "$sumFile" "${startingPoints[@]}"
+    return
+  fi
+
+  local key
+  for key in "${keys[@]}"
+  do
+    findBySHA256E "$key" "${startingPoints[@]}"
+  done
+}
+
+findBySizeAndChecksum()
+{
+  local size="$1"
+  local checksum="$2"
+  local algo="$3"
+  shift 3
+  local startingPoints=("$@")
+  loglevel 1 && >&2 declare -p size checksum algo startingPoints
+  # x 2026-04-16 2026-03-31 Assuming no double quotes in file paths found by size.  pri:B
+  local findCommand=(find "${findFirstOptions[@]}" "${startingPoints[@]}" -type f -size "${size}c" -exec bash -c "_() { \"$algo\" \"\$1\" | grep -q '^${checksum} '; }; _ \"\$@\"" $SHELL {} \; "${findLastOutputArgs[@]}")
+  loglevel 1 && >&2 declare -p findCommand
+  "${findCommand[@]}"
+}
+
+findBySHA256E()
+{
+  local key="$1"
+  shift
+  local size="${key##*SHA256E-s}"
+  size="${size%%-*}"
+  local checksum="${key##*SHA256E-s*--}"
+  checksum="${checksum%%.*}"
+  loglevel 1 && >&2 declare -p key
+  findBySizeAndChecksum "$size" "$checksum" sha256sum "$@"
+}
+
+injectBySumFile()
+{
+  # Looks for lines beginning with '*', meaning that path is a reference to a
+  # file by that key, and not already the file itself.
+	local sumFile="$1"
+	shift;
+  local searchLocations=("$@")
+
+  local sumFileDir="$(dirname "$sumFileDir")"
+
+  [[ -z $COLUMNS ]] && local COLUMNS=80
+  local segmentWidth=$(((COLUMNS-20)/2))
+  local IFS="$oIFS" key path name shortName existing=()
+
+	while read key path
+  do
+    [[ ${key:0:1} == '*' ]] || continue
+    name="$(basename "$path")"
+    >&2 echo -n " Searching for  $(truncateMiddle $segmentWidth "$name")"
+    key="${key#\*}"
+    IFS=$'\n'
+    existing=($(find-key -d ~ "$key"))
+    IFS="$oIFS"
+    if ! [[ -n ${#existing[@]} && -s "${existing[0]}" ]]
+    then
+      >&2 echo $'\r'"  (missing)   "
+      continue
+    fi
+
+    fullPath="$path"
+    [[ ${fullPath:0:1} == '/' ]] || fullPath="${sumFileDir}/${fullPath}"
+
+    >&2 echo -n "  <==  $(truncateMiddle $segmentWidth "${existing[0]}")"$'\r'" copying to   "
+
+    cp "${opt_cpArgs[@]}" "${existing[0]}" "$fullPath"
+    if [[ $? -eq 0 ]]
+    then
+      >&2 echo $'\r'" RESTORED     "
+    else
+      >&2 echo $'\r'" FAILED       "
+    fi
+  done < "$sumFile"
+}
+
+truncateMiddle()
+{
+  local length="$1"
+  shift
+  local input="$*"
+
+  if [[ ${#input} -le $length ]]
+  then
+    echo "$input"
+  else
+    echo "${input:0:$(($length / 2))}…${input:$((${#input}-$(($length / 2 - 1))))}"
+  fi
+}
+
+help_findKey()
+{
+  echo "SUMMARY: $SCRIPT_SUMMARY"
+  echo "USAGE: $SCRIPT_USAGE"
+  echo
+  echo "OPTIONS:"
+  echo
+  echo " -d DIR"
+  echo $'\t'"Search in DIR (PWD by default)."
+  echo
+  echo " --sumfile[=SUMFILE]"
+  echo $'\t'"Get keys to search for from SUMFILE (default to .SUMSHA256E*)"
+  echo $'\t'"lines beginning '*' (sumdir ^0.3.0)."
+  echo $'\t'"A file found by that key is copied to the corresponding path in SUMFILE,"
+  echo $'\t'"relative to the SUMFILE location, with --backup=CONTROL (defaults to none)."
+  echo $'\t'"Output to STDERR respects environment COLUMN value."
+  echo $'\t'"NOTE: You may want to generate a new SUMFILE after this operation, to avoid duplicates"
+  echo
+  echo " --backup[=CONTROL]"
+  echo $'\t'"Used with --sumfile. Passed to cp. --backup=none overwrites without making a copy."
+  echo
+  echo " -z, -f FMT"
+  echo $'\t'"Format output lines (corresponds to -print0 and -printf respectively, in find)."
+  echo
+  echo " -h, --help"
+  echo $'\t'"Show this help."
+  echo
+  echo "EXAMPLES:"
+  echo
+  echo " find-key SHA256E-s12345678--abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+  echo $'\t'"# Find matching files in the current directory, and print the paths to STDOUT."
+  echo
+  echo " find-key --sumfile -d ~"
+  echo $'\t'"# Copies found matches from the user's home directory"
+  echo $'\t'"# to paths in the latest SUMSHA256E* file in the current directory."
+  echo
+  echo " find-key --sumfile=~/Pictures/.SUMSHA256E--20260626T172302Z"
+  echo $'\t'"# Copies found matches in the current directory to paths listed"
+  echo $'\t'"# in the given SUMFILE."
+  echo
+  echo "${SCRIPT_NAME} version ${SCRIPT_VERSION}, ${SCRIPT_MODIFIED}"
+}
+
+loglevel() { [[ $opt_verbose -ge $1 ]]; }
+
+feedback() { loglevel $1 || return; shift; >&2 echo "$@"; }
+
+findKey "$@"
