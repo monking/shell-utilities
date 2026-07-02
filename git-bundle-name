@@ -6,26 +6,32 @@
 # ...
 
 NAME=git-bundle-name
-VERSION=0.0.2
+VERSION=0.0.3
 MODIFIED=2026-07-01
 
 makeBundleName()
 {
   local shouldShowFullPath=false
-  local gitArgs=() commitTimestamp commitHash repoName bundleName
+  local gitFirstArgs=() gitRevArgs=() commitTimestamp commitHashes repoName bundleName
   while [[ $# -gt 0 ]]
   do
     case $1 in
-      -C) gitArgs+=("$1" "$2"); shift;;
+      -C) gitFirstArgs+=("$1" "$2"); shift;;
       --full) shouldShowFullPath=true;;
+      *) gitRevArgs+=("$1");;
     esac
     shift
   done
-  commitTimestamp="$(git "${gitArgs[@]}" log -n 1 --pretty='%at')" || return
-  commitHash="$(git "${gitArgs[@]}" rev-parse HEAD)" || return
-  repoPath="$(git "${gitArgs[@]}" rev-parse --show-toplevel)" || return
+  if [[ ${#gitRevArgs[@]} -eq 0 ]]
+  then
+    gitRevArgs+=(HEAD)
+  fi
+  commitTimestamp="$(git "${gitFirstArgs[@]}" log -n 1 --pretty='%at' "${gitRevArgs[@]}")" || return
+  commitHashes=($(git "${gitFirstArgs[@]}" rev-parse "${gitRevArgs[@]}")) || return
+  lastCommitHash="${commitHashes[@]:$((${#commitHashes[@]}-1))}" || return
+  repoPath="$(git "${gitFirstArgs[@]}" rev-parse --show-toplevel)" || return
   repoName="$(basename "$repoPath")" || return
-  bundleName="${repoName}--${commitTimestamp}--${commitHash}.bundle"
+  bundleName="${repoName}--${commitTimestamp}--${lastCommitHash}.bundle"
 
   if [[ $shouldShowFullPath == true ]]
   then
@@ -38,7 +44,7 @@ makeBundleName()
 showBundleNameHelp()
 {
   echo "SUMMARY: Generate a descriptive name for a git bundle file."
-  echo "USAGE: $NAME [-C PATH]"
+  echo "USAGE: $NAME [-C PATH] [<git-rev-list-args>]"
   echo
   echo "OPTIONS:"
   echo
@@ -50,6 +56,9 @@ showBundleNameHelp()
   echo
   echo $'\t'"-h, --help"
   echo $'\t\t'"Show this help"
+  echo
+  echo $'\t'"<git-rev-list-args>"
+  echo $'\t\t'"See manual for git-bundle."
   echo
   echo "EXAMPLE:"
   echo $'\t'"git bundle create \$(git-bundle-name --full) --all"
