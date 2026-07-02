@@ -11,8 +11,8 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.1
-  SCRIPT_MODIFIED=2026-06-19
+  SCRIPT_VERSION=0.3.2
+  SCRIPT_MODIFIED=2026-07-01
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
@@ -405,7 +405,7 @@
     fi
 
     if command -v "${sumCommand[0]}" &>/dev/null; then
-      feedback 1 "Using $(which "${sumCommand[0]}")";
+      feedback 1 "Using $(command -v "${sumCommand[0]}")";
     else
       die 1 "Missing selected checksum software: ${sumCommand[0]}.";
     fi

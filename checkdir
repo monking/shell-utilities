@@ -2,8 +2,8 @@
 # Author: Christopher Lovejoy <c@lovejoy.io>
 
 SCRIPT_NAME=checkdir
-SCRIPT_VERSION=0.3.0
-SCRIPT_MODIFIED=2026-06-16
+SCRIPT_VERSION=0.3.1
+SCRIPT_MODIFIED=2026-07-01
 
 ## PLUMBING:
 
@@ -117,7 +117,7 @@ initializeSumCommand() {
     *) die "Unknown sum algorithm '${opt_algorithm}'.";;
   esac
   if command -v "${sumCommand[0]}" &>/dev/null; then
-    feedback 1 "Using $(which "${sumCommand[0]}")";
+    feedback 1 "Using $(command -v "${sumCommand[0]}")";
   else
     die "Missing checksum software: ${sumCommand[0]}.";
   fi
