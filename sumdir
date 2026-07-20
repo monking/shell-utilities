@@ -11,8 +11,8 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.1
-  SCRIPT_MODIFIED=2026-06-19
+  SCRIPT_VERSION=0.3.2
+  SCRIPT_MODIFIED=2026-07-20
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
@@ -117,7 +117,7 @@
     SCRIPT_DESCRIPTION_LINES=(
       "If no PATH is specified, the current directory (\$PWD) is used."
       ""
-      "If no SUMFILE is specified, .*SUM* and *SUM* is globbed, and the newest one is used."
+      "If no SUMFILE is specified, \$PWD/${DEFAULT_OUTPUT_FILE_TEMPLATE} is used (see TEMPLATES)."
       ""
       "TEMPLATES"
       " The following strings are substituted for dynamic values:"
@@ -623,6 +623,7 @@
 
 ## CONFIGURATION:
 {
+  # NOTE: DEFAULT_EXAMPLE_NAME and opt_example_name must agree for getDefaultOptName and getEnvOptName to work.
   DEFAULT_ALGORITHM='sha256';
   DEFAULT_COLUMN_SEP='\t';
   DEFAULT_DATE_FORMAT='+%Y%m%dT%H%M%SZ';
