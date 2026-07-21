@@ -475,7 +475,6 @@
       then
         # LATER Also handle symlink key references  uuid:c79db6fa-5d82-4459-9011-c02f1274d7b4
         key="$(cat "$path" | sed 's/^.*\///' | grep '^SHA256E')" # grepping to avoid wacky values
-        >&2 declare -p key path
         if [[ $key =~ $PATTERN_SHA256E ]] then
           key="${KEY_REF_PREFIX}${key}"
           loglevel 3 && >&2 echo "# $(declare -p key path)"
