@@ -6,11 +6,11 @@
 #   - git-annex-inject (bed1c3eb-261c-4915-beea-99424492515b)
 # ...
 
-SCRIPT_VERSION=0.2.0
+SCRIPT_VERSION=0.2.1
 SCRIPT_NAME=find-key
 SCRIPT_SUMMARY="find a file by size and checksum"
 SCRIPT_USAGE="${SCRIPT_NAME} [-v] [-h] [[-d DIR]…] [-z|-f FMT] [--sumfile=PATH [--backup[=CONTROL]] | KEY…]"
-SCRIPT_MODIFIED=2026-06-26
+SCRIPT_MODIFIED=2026-07-23
 
 opt_verbose=0
 opt_cpArgs=()
@@ -26,7 +26,7 @@ findKey()
   while [[ $# -gt 0 ]]
   do
     case $1 in
-      -h|--help) help_findKey; exit;;
+      -h|--help) help_findKey | less; exit;;
       -L) findFirstOptions+=("$1");;
       -d) startingPoints+=("$2"); shift;;
       -v|-vv|-vvv) ((opt_verbose += ${#1} - 1));;
