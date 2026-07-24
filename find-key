@@ -6,11 +6,11 @@
 #   - git-annex-inject (bed1c3eb-261c-4915-beea-99424492515b)
 # ...
 
-SCRIPT_VERSION=0.2.1
+SCRIPT_VERSION=0.3.0
 SCRIPT_NAME=find-key
-SCRIPT_SUMMARY="find a file by size and checksum"
+SCRIPT_SUMMARY="Find a file by size and checksum (SHA256E key)."
 SCRIPT_USAGE="${SCRIPT_NAME} [-v] [-h] [[-d DIR]…] [-z|-f FMT] [--sumfile=PATH [--backup[=CONTROL]] | KEY…]"
-SCRIPT_MODIFIED=2026-07-23
+SCRIPT_MODIFIED=2026-07-24
 
 opt_verbose=0
 opt_cpArgs=()
@@ -31,6 +31,7 @@ findKey()
       -d) startingPoints+=("$2"); shift;;
       -v|-vv|-vvv) ((opt_verbose += ${#1} - 1));;
       --verbose) ((opt_verbose++));;
+      -q|--quiet) opt_verbose=-1;;
       --sumfile) sumFile="$(ls -t .SUMSHA256E* 2>/dev/null | head -1)";;
       --sumfile=*) sumFile="${1#*=}";;
       --backup*) opt_cpArgs=("$1");;
@@ -51,8 +52,35 @@ findKey()
   fi
 
   local key
+  local nonKeyInput fileContentsSize # For when provided "KEY" is actually a file.
   for key in "${keys[@]}"
   do
+    if [[ ${key:0:9} != SHA256E-s ]]
+    then
+      nonKeyInput="$key"
+      if [[ -L "$key" ]]
+      then
+        key="$(readlink "$key" | sed 's;.*/;;')"
+      elif [[ -s "$key" ]] \
+        && fileContentsSize=($(wc "$key")) \
+        && [[ \
+          ${#fileContentsSize[@]} -ge 3 \
+          && ${fileContentsSize[0]} -eq 1 \
+          && ${fileContentsSize[1]} -eq 1 \
+          && ${fileContentsSize[2]} -lt 300 \
+        ]]
+      then
+        key="$(cat "$key" | sed 's;.*/;;')"
+      elif [[ -e "$key" ]]
+      then
+        >&2 echo "File does not refer to a SHA256E key: $key"
+        continue
+      else
+        >&2 echo "Invalid key: $key"
+        continue
+      fi
+      feedback 0 "# Got key $key from $nonKeyInput"
+    fi
     findBySHA256E "$key" "${startingPoints[@]}"
   done
 }
@@ -68,7 +96,12 @@ findBySizeAndChecksum()
   # x 2026-04-16 2026-03-31 Assuming no double quotes in file paths found by size.  pri:B
   local findCommand=(find "${findFirstOptions[@]}" "${startingPoints[@]}" -type f -size "${size}c" -exec bash -c "_() { \"$algo\" \"\$1\" | grep -q '^${checksum} '; }; _ \"\$@\"" $SHELL {} \; "${findLastOutputArgs[@]}")
   loglevel 1 && >&2 declare -p findCommand
-  "${findCommand[@]}"
+  if loglevel 1
+  then
+    "${findCommand[@]}"
+  else
+    "${findCommand[@]}" 2>/dev/null
+  fi
 }
 
 findBySHA256E()
@@ -87,8 +120,8 @@ injectBySumFile()
 {
   # Looks for lines beginning with '*', meaning that path is a reference to a
   # file by that key, and not already the file itself.
-	local sumFile="$1"
-	shift;
+  local sumFile="$1"
+  shift;
   local searchLocations=("$@")
 
   local sumFileDir="$(dirname "$sumFileDir")"
@@ -97,7 +130,7 @@ injectBySumFile()
   local segmentWidth=$(((COLUMNS-20)/2))
   local IFS="$oIFS" key path name shortName existing=()
 
-	while read key path
+  while read key path
   do
     [[ ${key:0:1} == '*' ]] || continue
     name="$(basename "$path")"

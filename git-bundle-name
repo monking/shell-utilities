@@ -1,0 +1,76 @@
+#!/bin/bash
+# ---
+# dateCreated: 2026-07-02
+# relatedLink:
+#   - url: ../lib/shell-utilities/.disused/git-bundle-helper
+# ...
+
+NAME=git-bundle-name
+VERSION=0.0.3
+MODIFIED=2026-07-01
+
+makeBundleName()
+{
+  local shouldShowFullPath=false
+  local gitFirstArgs=() gitRevArgs=() commitTimestamp commitHashes repoName bundleName
+  while [[ $# -gt 0 ]]
+  do
+    case $1 in
+      -C) gitFirstArgs+=("$1" "$2"); shift;;
+      --full) shouldShowFullPath=true;;
+      *) gitRevArgs+=("$1");;
+    esac
+    shift
+  done
+  if [[ ${#gitRevArgs[@]} -eq 0 ]]
+  then
+    gitRevArgs+=(HEAD)
+  fi
+  commitTimestamp="$(git "${gitFirstArgs[@]}" log -n 1 --pretty='%at' "${gitRevArgs[@]}")" || return
+  commitHashes=($(git "${gitFirstArgs[@]}" rev-parse "${gitRevArgs[@]}")) || return
+  lastCommitHash="${commitHashes[@]:$((${#commitHashes[@]}-1))}" || return
+  repoPath="$(git "${gitFirstArgs[@]}" rev-parse --show-toplevel)" || return
+  repoName="$(basename "$repoPath")" || return
+  bundleName="${repoName}--${commitTimestamp}--${lastCommitHash}.bundle"
+
+  if [[ $shouldShowFullPath == true ]]
+  then
+    echo "$(dirname "$repoPath")/${bundleName}"
+  else
+    echo "$bundleName"
+  fi
+}
+
+showBundleNameHelp()
+{
+  echo "SUMMARY: Generate a descriptive name for a git bundle file."
+  echo "USAGE: $NAME [-C PATH] [<git-rev-list-args>]"
+  echo
+  echo "OPTIONS:"
+  echo
+  echo $'\t'"-C PATH"
+  echo $'\t\t'"Reference git working copy at PATH, instead of PWD."
+  echo
+  echo $'\t'"--full"
+  echo $'\t\t'"Output the full path, putting the bundle alongside the working copy."
+  echo
+  echo $'\t'"-h, --help"
+  echo $'\t\t'"Show this help"
+  echo
+  echo $'\t'"<git-rev-list-args>"
+  echo $'\t\t'"See manual for git-bundle."
+  echo
+  echo "EXAMPLE:"
+  echo $'\t'"git bundle create \$(git-bundle-name --full) --all"
+  echo
+  echo "$NAME version $VERSION ($MODIFIED)"
+}
+
+for arg in "$@"
+do
+  case $arg in
+    -h|--help) showBundleNameHelp; exit;;
+  esac
+done
+
+makeBundleName "$@"
