@@ -11,8 +11,8 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.2
-  SCRIPT_MODIFIED=2026-07-20
+  SCRIPT_VERSION=0.3.3
+  SCRIPT_MODIFIED=2026-07-24
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
@@ -219,7 +219,7 @@
     ## LOOP THROUGH INPUT DIRECTORIES
     local dStackHeight=0
     local cwd="$PWD";
-    local outputFilePath;
+    local outputPath;
     for dir in "${inputDirectories[@]}"; do
       dir="${dir%/}" # Remove trailing slash from directory paths.
       while [[ $dStackHeight -gt 0 ]]; do
@@ -240,20 +240,19 @@
 
       local date="$(TZ="$opt_timezone" date "$opt_date_format")";
 
-      local outputFilename="${opt_output_file_template/\{\}/$date}";
-      outputFilename="${outputFilename/\%d/$date}";
-      outputFilename="${outputFilename/\%a/$opt_algorithm}";
-      outputFilename="${outputFilename/\%A/${algoUpper}}";
-      if [[ $outputFilename =~ / ]]; then
-        if [[ ${outputFilePath:0:1} == '/' ]]; then
-          outputFilePath="$outputFilename";
-        else
-          outputFilePath="${cwd}/${outputFilename}";
+      local outputPath="${opt_output_file_template/\{\}/$date}";
+      outputPath="${outputPath/\%d/$date}";
+      outputPath="${outputPath/\%a/$opt_algorithm}";
+      outputPath="${outputPath/\%A/${algoUpper}}";
+      if [[ $outputPath =~ / ]]; then
+        if [[ ${outputPath:0:1} != '/' ]]; then
+          outputPath="${cwd}/${outputPath}";
         fi
       else
-        outputFilePath="${dir}/${outputFilename}";
+        outputPath="${PWD}/${outputPath}";
       fi
-      feedback 0 "Outputting to: ${outputFilePath}";
+      outputFilename="$(basename "$outputPath")"
+      feedback 0 "Outputting to: ${outputPath}";
 
       local findArgs=();
       if [[ $opt_should_dereference == true ]]; then
@@ -285,7 +284,7 @@
         findArgs+=(-print0);
       fi
 
-      loglevel 1 && declare -p findArgs
+      loglevel 1 && declare -p findArgs outputPath PWD
       {
         echo "# Generated ${date} by ${SCRIPT_NAME} ${SCRIPT_VERSION}  (called as \`${SCRIPT_NAME} $(escapeArgs "${CALL_ARGS[@]}")\`)";
         if [[ -n $opt_column_sep ]]; then
@@ -319,11 +318,11 @@
           | sed -E 's/(^|\x00)\.\//\1/g' \
           | "${jobExecutor[@]}" "${sumCommand[@]}";
         # LATER Sort file list by path (`sort -k2`). todo.sumdir.txt#a0a942a5-d08d-469c-b572-ee8b3e8ae4ec
-      } > "${outputFilePath}";
+      } > "${outputPath}";
       local sumStatus=$?;
       loglevel 0 && {
         >&2 echo -n "Generated: ";
-        echo "${outputFilePath}"; # Output path, for scripting
+        echo "${outputPath}"; # Output path, for scripting
       }
 
       if [[ $sumStatus != 0 ]]; then
