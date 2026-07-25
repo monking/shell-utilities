@@ -11,7 +11,7 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.3
+  SCRIPT_VERSION=0.3.4
   SCRIPT_MODIFIED=2026-07-24
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
@@ -486,7 +486,7 @@
       then
         sum=($(sha256sum "$path")) || continue
 
-        ext="${basename#*.}"
+        ext="${basename##*.}"
         if [[ $ext == $basename ]] then
           ext=''
         else
