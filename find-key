@@ -6,14 +6,15 @@
 #   - git-annex-inject (bed1c3eb-261c-4915-beea-99424492515b)
 # ...
 
-SCRIPT_VERSION=0.3.0
+SCRIPT_VERSION=0.3.1
 SCRIPT_NAME=find-key
 SCRIPT_SUMMARY="Find a file by size and checksum (SHA256E key)."
-SCRIPT_USAGE="${SCRIPT_NAME} [-v] [-h] [[-d DIR]…] [-z|-f FMT] [--sumfile=PATH [--backup[=CONTROL]] | KEY…]"
+SCRIPT_USAGE="${SCRIPT_NAME} [-v] [-h] [[-d DIR]…] [-z|-f FMT] [--sumfile=PATH [--get [--backup[=CONTROL]]] | KEY…]"
 SCRIPT_MODIFIED=2026-07-24
 
 opt_verbose=0
 opt_cpArgs=()
+opt_mode=find
 findFirstOptions=()
 findLastOutputArgs=(-print)
 oIFS="$IFS"
@@ -32,6 +33,7 @@ findKey()
       -v|-vv|-vvv) ((opt_verbose += ${#1} - 1));;
       --verbose) ((opt_verbose++));;
       -q|--quiet) opt_verbose=-1;;
+      --get) opt_mode=copy;;
       --sumfile) sumFile="$(ls -t .SUMSHA256E* 2>/dev/null | head -1)";;
       --sumfile=*) sumFile="${1#*=}";;
       --backup*) opt_cpArgs=("$1");;
@@ -43,11 +45,11 @@ findKey()
   done
   [[ ${#startingPoints[@]} -eq 0 ]] && startingPoints+=("$PWD")
   feedback 1 "Log level: ${opt_verbose}"
-  loglevel 2 && >&2 declare -p findFirstOptions startingPoints findLastOutputArgs keys
+  loglevel 2 && >&2 declare -p findFirstOptions startingPoints findLastOutputArgs keys opt_mode sumFile
 
   if [[ -n $sumFile ]]
   then
-    injectBySumFile "$sumFile" "${startingPoints[@]}"
+    findBySumfile "$sumFile" "${startingPoints[@]}"
     return
   fi
 
@@ -116,7 +118,7 @@ findBySHA256E()
   findBySizeAndChecksum "$size" "$checksum" sha256sum "$@"
 }
 
-injectBySumFile()
+findBySumfile()
 {
   # Looks for lines beginning with '*', meaning that path is a reference to a
   # file by that key, and not already the file itself.
@@ -130,32 +132,69 @@ injectBySumFile()
   local segmentWidth=$(((COLUMNS-20)/2))
   local IFS="$oIFS" key path name shortName existing=()
 
+  local findKeyCommonArgs=()
+  if [[ ${#searchLocations[@]} -gt 0 ]]
+  then
+    local path
+    for path in "${searchLocations[@]}"
+    do
+      findKeyCommonArgs+=(-d "$path")
+    done
+  else
+    findKeyCommonArgs+=(-d '~')
+  fi
+
+  loglevel 1 && >&2 declare -p sumFile sumFileDir findKeyCommonArgs
+
   while read key path
   do
-    [[ ${key:0:1} == '*' ]] || continue
+    if [[ ${key:0:1} == '#' ]]
+    then
+      feedback 2 "Skipping comment: $key $path"
+      continue
+    fi
+
+    if [[ $opt_mode == copy && ${key:0:1} != '*' ]]
+    then
+      feedback 2 "Skipping non-'*' sum row."
+      continue
+    fi
+
+    loglevel 2 && >&2 declare -p key path
     name="$(basename "$path")"
     >&2 echo -n " Searching for  $(truncateMiddle $segmentWidth "$name")"
     key="${key#\*}"
+    loglevel 2 && >&2 echo -n "Trimmed leading '*' from key => $(declare -p key)"
     IFS=$'\n'
-    existing=($(find-key -d ~ "$key"))
+    existing=($(findKey "${findKeyCommonArgs[@]}" "$key"))
     IFS="$oIFS"
     if ! [[ -n ${#existing[@]} && -s "${existing[0]}" ]]
     then
-      >&2 echo $'\r'"  (missing)   "
+      >&2 echo $'\r'"  (missing)     "
       continue
     fi
 
     fullPath="$path"
     [[ ${fullPath:0:1} == '/' ]] || fullPath="${sumFileDir}/${fullPath}"
 
-    >&2 echo -n "  <==  $(truncateMiddle $segmentWidth "${existing[0]}")"$'\r'" copying to   "
-
-    cp "${opt_cpArgs[@]}" "${existing[0]}" "$fullPath"
-    if [[ $? -eq 0 ]]
+    if [[ $opt_mode == copy ]]
     then
-      >&2 echo $'\r'" RESTORED     "
+      >&2 echo -n "  <==  $(truncateMiddle $segmentWidth "${existing[0]}")"$'\r'" copying to   "
+
+      cp "${opt_cpArgs[@]}" "${existing[0]}" "$fullPath"
+      if [[ $? -eq 0 ]]
+      then
+        >&2 echo $'\r'" RESTORED     "
+      else
+        >&2 echo $'\r'" FAILED       "
+      fi
     else
-      >&2 echo $'\r'" FAILED       "
+      >&2 echo -n "   ${#existing[@]} matches"$'\r'" FOUND        "
+      >&2 echo
+      IFS=$'\n'
+      echo "${existing[*]}"
+      IFS="$oIFS"
+      >&2 echo
     fi
   done < "$sumFile"
 }
@@ -187,13 +226,16 @@ help_findKey()
   echo " --sumfile[=SUMFILE]"
   echo $'\t'"Get keys to search for from SUMFILE (default to .SUMSHA256E*)"
   echo $'\t'"lines beginning '*' (sumdir ^0.3.0)."
-  echo $'\t'"A file found by that key is copied to the corresponding path in SUMFILE,"
-  echo $'\t'"relative to the SUMFILE location, with --backup=CONTROL (defaults to none)."
   echo $'\t'"Output to STDERR respects environment COLUMN value."
-  echo $'\t'"NOTE: You may want to generate a new SUMFILE after this operation, to avoid duplicates"
+  echo $'\t'"NOTE: You may want to generate a new SUMFILE after this operation, to avoid copying duplicates in future operations"
+  echo
+  echo " --get"
+  echo $'\t'"Used with --sumfile."
+  echo $'\t'"A file found by a key in SUMFILE is copied to the corresponding path in SUMFILE,"
+  echo $'\t'"relative to the SUMFILE location, with --backup=CONTROL (defaults to none)."
   echo
   echo " --backup[=CONTROL]"
-  echo $'\t'"Used with --sumfile. Passed to cp. --backup=none overwrites without making a copy."
+  echo $'\t'"Used with --sumfile --get. Passed to cp. --backup=none overwrites without making a copy."
   echo
   echo " -z, -f FMT"
   echo $'\t'"Format output lines (corresponds to -print0 and -printf respectively, in find)."
