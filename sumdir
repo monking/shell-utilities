@@ -11,8 +11,8 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.4
-  SCRIPT_MODIFIED=2026-07-24
+  SCRIPT_VERSION=0.3.5
+  SCRIPT_MODIFIED=2026-08-12
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
@@ -698,4 +698,18 @@
 }
 
 ## EXECUTION:
-main "$@";
+mainArgs=();
+if [[ -L "$0" ]]
+then
+  linkName="$(basename "$0")"
+  suffix="${linkName#sumdir}"
+  case ${suffix,,} in
+    *annex*|*sha256e*) mainArgs+=(-a sha256e);;
+    *sha256*) mainArgs+=(-a sha256);;
+    *b2*) mainArgs+=(-a b2);;
+  esac
+fi
+
+mainArgs+=("$@");
+
+main "${mainArgs[@]}";
