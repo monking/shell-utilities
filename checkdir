@@ -2,15 +2,15 @@
 # Author: Christopher Lovejoy <c@lovejoy.io>
 
 SCRIPT_NAME=checkdir
-SCRIPT_VERSION=0.3.1
-SCRIPT_MODIFIED=2026-07-01
+SCRIPT_VERSION=0.3.2
+SCRIPT_MODIFIED=2026-09-10
 
 ## PLUMBING:
 
 yell() { echo "$@" >&2; }
 die() { yell "$@"; exit 111; }
 must() { "$@" || die "cannot $*"; }
-loglevel() { [[ $opt_verbose -ge $1 ]] }
+loglevel() { [[ $opt_verbose -ge $1 ]]; }
 feedback() { loglevel $1 || return; shift; yell "$@"; }
 
 toLowerCase() {

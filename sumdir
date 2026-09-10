@@ -11,8 +11,8 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.5
-  SCRIPT_MODIFIED=2026-08-12
+  SCRIPT_VERSION=0.3.6
+  SCRIPT_MODIFIED=2026-09-10
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
@@ -474,7 +474,8 @@
       then
         # LATER Also handle symlink key references  uuid:c79db6fa-5d82-4459-9011-c02f1274d7b4
         key="$(cat "$path" | sed 's/^.*\///' | grep '^SHA256E')" # grepping to avoid wacky values
-        if [[ $key =~ $PATTERN_SHA256E ]] then
+        if [[ $key =~ $PATTERN_SHA256E ]]
+        then
           key="${KEY_REF_PREFIX}${key}"
           loglevel 3 && >&2 echo "# $(declare -p key path)"
         else
@@ -487,7 +488,8 @@
         sum=($(sha256sum "$path")) || continue
 
         ext="${basename##*.}"
-        if [[ $ext == $basename ]] then
+        if [[ $ext == $basename ]]
+        then
           ext=''
         else
           while [[ ${#ext} -gt $MAX_EXTENSION_LENGTH ]]; do
@@ -548,7 +550,7 @@
 
   die() { local status=$1; shift; feedback 0 "$@"; exit $status; }; export -f die;
   must() { "$@" || die $? "cannot $*"; }; export -f must;
-  loglevel() { [[ $opt_verbose -ge $1 ]] }; export -f loglevel;
+  loglevel() { [[ $opt_verbose -ge $1 ]]; }; export -f loglevel;
   feedback() { loglevel $1 || return; shift; >&2 echo "$@"; }; export -f feedback;
 
   getValueIfDefined() {
