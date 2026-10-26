@@ -4,13 +4,14 @@
 # uuid: 3423dd9c-2fb0-4e1a-b219-c7551704336a
 # related:
 #   - git-annex-inject (bed1c3eb-261c-4915-beea-99424492515b)
+# sum: b2sum=ecf4c36a&size=7121
 # ...
 
 SCRIPT_VERSION=0.3.1
 SCRIPT_NAME=find-key
 SCRIPT_SUMMARY="Find a file by size and checksum (SHA256E key)."
 SCRIPT_USAGE="${SCRIPT_NAME} [-v] [-h] [[-d DIR]…] [-z|-f FMT] [--sumfile=PATH [--get [--backup[=CONTROL]]] | KEY…]"
-SCRIPT_MODIFIED=2026-07-24
+SCRIPT_MODIFIED=2026-10-26
 
 opt_verbose=0
 opt_cpArgs=()
@@ -81,7 +82,7 @@ findKey()
         >&2 echo "Invalid key: $key"
         continue
       fi
-      feedback 0 "# Got key $key from $nonKeyInput"
+      feedback 0 "# key $key in $nonKeyInput"
     fi
     findBySHA256E "$key" "${startingPoints[@]}"
   done

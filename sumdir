@@ -444,6 +444,7 @@
       bashCommandQuoted+=("$(printf %q "$1")");
       shift;
     done
+    # FIXME Paths with spaces are not preserved. 0c215cd5-9822-44a5-8da6-681720ab0099
     xargs -i -0 bash -c "${bashCommandQuoted[*]} {}";
   }
 

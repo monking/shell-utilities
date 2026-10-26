@@ -1,124 +1,135 @@
 #!/bin/bash
-_is_yielded=false;
+_is_yielded=false
 yell() { echo "$@" >&2; }
 die() { yell "$@"; exit 111; }
 flag() { _is_yielded=true; yell "ERROR: $@"; }
 yield() { if [ "$_is_yielded" == "true" ]; then die "Aborting because of above errors."; fi; }
 
-SCRIPT_NAME="${0##*/}";
-DEFAULT_DIGEST_LENGTH=32;
-DEFAULT_OUTPUT_FORMAT='query';
-DEFAULT_ALGORITHM_NAME_EXE='b2sum';
-DEFAULT_ALGORITHM_NAME_SHORT='b2';
-showHelp() {
-	echo "USAGE (STDIN or PATH modes):";
-	echo "[…] | ${SCRIPT_NAME} [OPTIONS]";
-	echo "${SCRIPT_NAME} [OPTIONS] PATH";
-	echo "";
-	echo "OPTIONS:";
-	echo " -h    Show this help";
-  echo " -a A  Set algorithm to A; any name that has a *sum command, e.g. b2, sha256.";
-	#echo " -f FORMAT";
-	#echo "       Specify source FORMAT, so that comments can be escaped correctly (only sh and vim are used right now)";
-	echo " -j, --json    Output JSON";
-	echo " -y, --yaml    Output YAML";
-	echo " -t, --text    Output plain text";
-	echo " -q, --query   Output query string (default)";
-	echo " -l N  Set digest length in bits, default ${DEFAULT_DIGEST_LENGTH} (see ${DEFAULT_ALGORITHM_NAME_SHORT} -l)";
-	echo "";
-	echo "EXAMPLE:";
-	echo "  cat myfile.txt | ${SCRIPT_NAME}";
+SCRIPT_NAME="${0##*/}"
+SCRIPT_VERSION=0.5.2
+SCRIPT_MODIFIED=2026-10-25
+
+DEFAULT_DIGEST_LENGTH=32
+DEFAULT_OUTPUT_FORMAT='query'
+DEFAULT_ALGORITHM_NAME_EXE='b2sum'
+DEFAULT_ALGORITHM_NAME_SHORT='b2'
+
+helpSumSrc() {
+  echo "USAGE (STDIN or PATH modes):"
+  echo "[…] | ${SCRIPT_NAME} [OPTIONS]"
+  echo "${SCRIPT_NAME} [OPTIONS] PATH"
+  echo
+  echo "OPTIONS:"
+  echo " -h    Show this help"
+  echo " -a A  Set algorithm to A; any name that has a *sum command, e.g. b2, sha256."
+  echo " -i, --input=FORMAT"
+  echo "       Specify source FORMAT, so that comments can be escaped correctly."
+  echo "       Supports: {sh,bash}, {vim,vimrc}, {c,h,js,javascript,ts,typescript,cpp}"
+  echo " -j, --json    Output JSON"
+  echo " -y, --yaml    Output YAML"
+  echo " -t, --text    Output plain text"
+  echo " -q, --query   Output query string (default)"
+  echo " -l N  Set digest length in bits, default ${DEFAULT_DIGEST_LENGTH} (see ${DEFAULT_ALGORITHM_NAME_SHORT} -l)"
+  echo
+  echo "EXAMPLE:"
+  echo "  cat myfile.txt | ${SCRIPT_NAME}"
+  echo
+  echo "$SCRIPT_NAME version $SCRIPT_VERSION ($SCRIPT_MODIFIED)"
 }
 
-algorithmNameExe="$DEFAULT_ALGORITHM_NAME_EXE";
-algorithmNameShort="$DEFAULT_ALGORITHM_NAME_SHORT";
+algorithmNameExe="$DEFAULT_ALGORITHM_NAME_EXE"
+algorithmNameShort="$DEFAULT_ALGORITHM_NAME_SHORT"
 targetFile=
-opt_sumLength=$DEFAULT_DIGEST_LENGTH;
-opt_outputFormat=$DEFAULT_OUTPUT_FORMAT;
+opt_sumLength=$DEFAULT_DIGEST_LENGTH
+opt_outputFormat=$DEFAULT_OUTPUT_FORMAT
+opt_inputFormat=
 while [ $# -gt 0 ]; do
-	case $1 in
-		-h) showHelp; exit;;
-		#-f) opt_inputFormat="$2"; shift;;
+  case $1 in
+    -h) helpSumSrc; exit;;
+    -i) opt_inputFormat="$2"; shift;;
+    --input=*) opt_inputFormat="${1#*=}";;
     -a)
-      a="${2}";
-      ax="${a}sum";
+      a="${2}"
+      ax="${a}sum"
       if command -v "$ax" &>/dev/null; then
-        algorithmNameShort="$a";
-        algorithmNameExe="$ax";
-        shift;
+        algorithmNameShort="$a"
+        algorithmNameExe="$ax"
+        shift
       fi;;
-		-j|--json) opt_outputFormat='json';;
-		-y|--yaml) opt_outputFormat='yaml';;
-		-t|--text) opt_outputFormat='plain';;
-		-q|--query) opt_outputFormat='query';;
-		-l) opt_sumLength=$2; shift;;
-		*) if [[ -z $targetFile ]]; then targetFile="$1"; else flag "Unknown arg '$1'"; fi;;
-	esac
-	shift;
+    -j|--json) opt_outputFormat='json';;
+    -y|--yaml) opt_outputFormat='yaml';;
+    -t|--text) opt_outputFormat='plain';;
+    -q|--query) opt_outputFormat='query';;
+    -l) opt_sumLength=$2; shift;;
+    *) if [[ -z $targetFile ]]; then targetFile="$1"; else flag "Unknown arg '$1'"; fi;;
+  esac
+  shift
 done
 
 if [[ -t 0 && ( -z "$targetFile" || ! -s "$targetFile" ) ]]; then
-	echo "Please provide input data, by STDIN (e.g. 'cat ~/myfile.txt | ${SCRIPT_NAME}') or as first non-option argument (e.g. '${SCRIPT_NAME} myfile.txt')" >&2;
-	echo '' >&2;
-	showHelp >&2;
-	exit 1;
+  echo "Please provide input data, by STDIN (e.g. 'cat ~/myfile.txt | ${SCRIPT_NAME}') or as first non-option argument (e.g. '${SCRIPT_NAME} myfile.txt')" >&2
+  echo '' >&2
+  helpSumSrc >&2
+  exit 1
 fi
 
-[[ $opt_sumLength =~ ^[0-9]+$ ]] || flag "Please specify only integer numbers for the length value of option '-l'.";
+[[ $opt_sumLength =~ ^[0-9]+$ ]] || flag "Please specify only integer numbers for the length value of option '-l'."
 
-yield;
+yield
 
 getOmitLinesPattern() {
-	local commentLineStart='#';
-	#local blockCommentPattern=''; # WISH, LATER: omit block comments. Maybe use some other program to do the comment identification (Vim)?
-	local filename=$1;
-	#echo "DEBUG(filename): ${filename}"; #XXX
-	if [[ -n $filename ]]; then
-		local ftype="${filename##*.}";
-		ftype="${ftype##*/}";
-		case $ftype in
-			vim|vimrc) commentLineStart='"';;
-			js|javascript|ts|typescript|c|cpp) commentLineStart='//';;
-			sh) commentLineStart='##';;
-			# LATER: add more.
-		esac
-	fi
-	local OMIT_KEYWORD='nosum';
-	# NOTE: grep is using -E extended RegExp option, so pipes are not escaped.
-	local pattern='^\s*$'; # empty line
-	pattern+='|^\s*'"${commentLineStart}"'[^!]'; # commented line, besides execution hint  FIXME (B) 2024-06-05 only applies when commentLineStart='#'
-	pattern+='|'"${commentLineStart}${OMIT_KEYWORD}"'$'; # lines ENDING like '#nosum'
-	echo "$pattern";
+  local commentLineStart='#'
+  #local blockCommentPattern=''; # WISH, LATER: omit block comments. Maybe use some other program to do the comment identification (Vim)?
+  local ftype
+  if [[ -n $opt_inputFormat ]]
+  then
+    ftype="$opt_inputFormat"
+  elif [[ -n $1 ]]; then
+    local ftype="${1##*.}"
+    ftype="${ftype##*/}"
+  fi
+  case $ftype in
+    vim|vimrc) commentLineStart='"';;
+    c|h|js|javascript|ts|typescript|cpp) commentLineStart='//';;
+    sh|bash) commentLineStart='#';;
+    # LATER: add more.
+  esac
+  local OMIT_KEYWORD='nosum'
+  # NOTE: grep is using -E extended RegExp option, so pipes are not escaped.
+  local pattern='^\s*$'; # empty line
+  pattern+='|^\s*'"${commentLineStart}"'[^!]'; # commented line, besides execution hint  FIXME (B) 2024-06-05 only applies when commentLineStart='#'
+  pattern+='|'"${commentLineStart}${OMIT_KEYWORD}"'$'; # lines ENDING like '#nosum'
+  echo "$pattern"
 }
 
 if [[ -n $targetFile ]]; then
-	omitPattern="$(getOmitLinesPattern "$targetFile")";
-	data="$(grep -E -v "$omitPattern" "$targetFile")";
+omitPattern="$(getOmitLinesPattern "$targetFile")"
+  data="$(grep -E -v "$omitPattern" "$targetFile")"
 else
-	omitPattern="$(getOmitLinesPattern)";
-	data="$(grep -E -v "$omitPattern")";
+  omitPattern="$(getOmitLinesPattern)"
+  data="$(grep -E -v "$omitPattern")"
 fi
-#>&2 echo -n "[DEBUG(omitPattern):\n${omitPattern}]";
-#>&2 echo -n "[DEBUG(DATA):\n${data}]" | head -20;exit 130;
-sumCommand=("$algorithmNameExe");
+#>&2 echo -n "[DEBUG(omitPattern):\n${omitPattern}]"
+#>&2 echo -n "[DEBUG(DATA):\n${data}]" | head -20;exit 130
+sumCommand=("$algorithmNameExe")
 if [[ $algorithmNameShort == 'b2' && $opt_sumLength -gt 0 ]]; then
-  sumCommand+=(-l ${opt_sumLength});
+  sumCommand+=(-l ${opt_sumLength})
 fi
-sum="$("${sumCommand[@]}" <(echo "$data") | awk '{ print $1 }')";
-size="$(echo "$data" | wc -c| awk '{ print $1 }')";
+sum="$("${sumCommand[@]}" <(echo -E -n "$data") | awk '{ print $1 }')"
+size="$(echo -E -n "$data" | wc -c| awk '{ print $1 }')"
 case $opt_outputFormat in
   json) echo "{\"sum\":\"${sum}\",\"size\":${size},\"date\":\"$(date '+%Y-%m-%dT%H:%M:%S%z')\",\"provider\":{\"name\":\"${SCRIPT_NAME}\",\"method\":\"${algorithmNameExe}\",\"length\":${opt_sumLength}}}";;
   yaml) echo -e "---\nsum: ${sum}\nsize: ${size}\nprovider:\n  name: ${SCRIPT_NAME}\n  method: ${algorithmNameExe}\n  length: ${opt_sumLength}\ndate: $(date '+%Y-%m-%dT%H:%M:%S%z')\n...";;
-	plain) echo "sum:${sum}#a=${algorithmNameShort},l=${opt_sumLength};size:${size};";;
-	query) echo "${algorithmNameExe}=${sum}&size=${size}";;
-	*) die "Unknown output form at '${opt_outputFormat}'";;
+  plain) echo "sum:${sum}#a=${algorithmNameShort},l=${opt_sumLength};size:${size};";;
+  query) echo "${algorithmNameExe}=${sum}&size=${size}";;
+  *) die "Unknown output form at '${opt_outputFormat}'";;
 esac
 
 ## HISTORY:
-# v0.1.0 2022-12-13  Optional JSON output. Adding -h documentation.   b2sum=0c305a3b&size=1592
-# v0.2.0 2022-12-16  2nd mode, PATH arg instead of STDIN; Renamed 'sumsrc' from 'sum-stream'.   b2sum=bf10f132&size=2041
-# v0.3.0 2022-12-19  Add query output format. Include '#!...' execution comment in sum. Change 'sum' key to '*sum' where '*' is algorithm short name.   b2sum=b64e99f0&size=2364
-# v0.4.0 2022-12-20  Adapt comment pattern to input source language (stub: only Vim by file name).   b2sum=beaa596f&size=2691
-# v0.5.0 2024-07-07  Fix omit pattern for grep -E. Adding to shell-utilities.   b2sum=d23acaeb&size=2787
-# v0.5.1 2025-04-25  Add full flags for --text, --query, for parameterized scripting.   b2sum=c26fba89&size=3871
-# STUB  2024-06-05  Support more formats, and allow specifying with input option arg.
+# v0.1.0	2022-12-13	Optional JSON output. Adding -h documentation.	b2sum=0c305a3b&size=1592
+# v0.2.0	2022-12-16	2nd mode, PATH arg instead of STDIN; Renamed 'sumsrc' from 'sum-stream'.	b2sum=bf10f132&size=2041
+# v0.3.0	2022-12-19	Add query output format. Include '#!...' execution comment in sum. Change 'sum' key to '*sum' where '*' is algorithm short name.	b2sum=b64e99f0&size=2364
+# v0.4.0	2022-12-20	Adapt comment pattern to input source language (stub: only Vim by file name).	b2sum=beaa596f&size=2691
+# v0.5.0	2024-07-07	Fix omit pattern for grep -E. Adding to shell-utilities.	b2sum=d23acaeb&size=2787
+# v0.5.1	2025-04-25	Add full flags for --text, --query, for parameterized scripting.	b2sum=c26fba89&size=3871
+# v0.5.2	2026-10-25	Add -i FORMAT option; avoid adding a trailing newline, fixes empty input showing length 1; removed non-essential ending semicolons; show version in help.	b2sum=64014e7b&size=4359

@@ -41,6 +41,17 @@ read-config()
         activeContexts+=(${1#--context=})
         IFS="$oIFS"
         ;;
+      -C)
+        IFS=','
+        activeContexts=($2)
+        IFS="$oIFS"
+        shift
+        ;;
+      --only-context=*)
+        IFS=','
+        activeContexts=(${1#--context=})
+        IFS="$oIFS"
+        ;;
       -n)
         configNameBase="$2"
         shift
@@ -97,6 +108,7 @@ read-config()
     eval "${configNameBase}${contextSuffix}[${escapedKey}]${assignmentRightSide}"
     if [[ -n $contextSuffix && $isContextMatched == true ]]
     then
+      # TODO concatenate existing keys #fed80541-75c2-47a9-97c5-dd6a0faef1d5
       eval "${configNameBase}[${escapedKey}]${assignmentRightSide}"
     fi
   }
