@@ -11,8 +11,8 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.6
-  SCRIPT_MODIFIED=2026-09-10
+  SCRIPT_VERSION=0.3.7
+  SCRIPT_MODIFIED=2026-10-28
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
@@ -214,8 +214,6 @@
 
     [[ ${#inputDirectories[@]} -eq 0 ]] && inputDirectories=("$PWD");
 
-
-
     ## LOOP THROUGH INPUT DIRECTORIES
     local dStackHeight=0
     local cwd="$PWD";
@@ -262,7 +260,12 @@
       if [[ $opt_should_recurse != true ]]; then
         findArgs+=(-maxdepth 1);
       fi
-      findArgs+=(-type f);
+      if [[ $opt_should_handle_key_refs == true ]]
+      then
+        findArgs+=(\( -type f -o -type l \));
+      else
+        findArgs+=(-type f);
+      fi
       findArgs+=(\! -name "$outputFilename");
       if [[ ${#opt_list_exclude_path[@]} -gt 0 ]]; then
         for pattern in "${opt_list_exclude_path[@]}"; do
@@ -439,21 +442,37 @@
 
   xargsNulWrapper() {
     # Invoking bash in order to access exported functions.
-    local bashCommandQuoted=()
+    local escapedCommand=()
     while [[ $# -gt 0 ]]; do
       bashCommandQuoted+=("$(printf %q "$1")");
       shift;
     done
-    # FIXME Paths with spaces are not preserved. 0c215cd5-9822-44a5-8da6-681720ab0099
-    xargs -i -0 bash -c "${bashCommandQuoted[*]} {}";
+    local xargsCommand=()
+    # WIP handling paths with spaces, but not guarding against double quotes. #0c215cd5-9822-44a5-8da6-681720ab0099
+    xargsCommand+=(xargs -I{} -0 bash -c "${bashCommandQuoted[*]} \"{}\"")
+    loglevel 2 && >&2 declare -p xargsCommand
+    "${xargsCommand[@]}"
   }
 
   sumSHA256E() {
-    local parseArgs=true path basename size sum ext extWIP getKeyReferenceContents=true
     local PATTERN_SHA256E='^SHA256E-s[0-9]+--[0-9a-f]{64}(\.[^.]{1,8}){0,2}$'
     local MAX_KEY_LENGTH=300
     local MAX_EXTENSION_LENGTH=10
     local KEY_REF_PREFIX='*'
+
+    local \
+      basename \
+      ext \
+      extWIP \
+      getKeyReferenceContents=true \
+      key \
+      parseArgs=true \
+      path \
+      referrentPath \
+      refKey \
+      size \
+      sum \
+      ;
 
     while [[ $# -gt 0 ]]; do
       if [[ $parseArgs == true ]]; then
@@ -469,19 +488,26 @@
 
       basename="$(basename "$path")"
 
-      size=($(du -L -b "$path")) || continue # LATER Honor opt_should_dereference  uuid: 23d2b673-c60b-4476-80eb-302869e8fedd
-
-      if [[ -n $path && $getKeyReferenceContents == true && $size -lt $MAX_KEY_LENGTH ]]
+      if [[ -L "$path" ]]
       then
-        # LATER Also handle symlink key references  uuid:c79db6fa-5d82-4459-9011-c02f1274d7b4
-        key="$(cat "$path" | sed 's/^.*\///' | grep '^SHA256E')" # grepping to avoid wacky values
-        if [[ $key =~ $PATTERN_SHA256E ]]
+        if [[ $getKeyReferenceContents == true ]]
         then
-          key="${KEY_REF_PREFIX}${key}"
-          loglevel 3 && >&2 echo "# $(declare -p key path)"
-        else
-          key=
+          referrentPath="$(readlink "$path")" \
+            && refKey="$(basename "$referrentPath")" \
+            && [[ $refKey =~ $PATTERN_SHA256E ]] \
+            || refKey=
         fi
+      else
+        size=($(du -b "$path" 2>/dev/null)) || continue
+        if [[ $getKeyReferenceContents == true && $size -lt $MAX_KEY_LENGTH ]]
+        then
+          refKey="$(cat "$path" | sed 's/^.*\///' | grep '^SHA256E')" 2> /dev/null # grepping to avoid wacky values
+        fi
+      fi
+
+      if [[ $getKeyReferenceContents == true && -n $refKey ]]
+      then
+        key="${KEY_REF_PREFIX}${refKey}"
       fi
 
       if [[ -z $key ]]
