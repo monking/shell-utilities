@@ -79,14 +79,15 @@
       "    env: SUMDIR_LIST_EXCLUDE_PATH"
       ""
       "--length N        "
-      "     (b2sum only) Set the length of the digest hash in bits."
-      "     Hashes appear 1/4 this length in hexadecimal"
-      "      (e.g --length 128 yields a has 32 characters long)."
-      "     Default and maximum is 512 (for an output 128 chars long)."
-      "     This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
+      "    (b2sum only) Set the length of the digest hash in bits."
+      "    Hashes appear 1/4 this length in hexadecimal"
+      "     (e.g --length 128 yields a has 32 characters long)."
+      "    Default and maximum is 512 (for an output 128 chars long)."
+      "    This is the same as setting the env var SUMDIR_LIST_B2_OPTS='--length:N'."
       ""
       "--time"
-      "    (Only with -a sha256e) Add modified time after filename after DELIM."
+      "    (Only with -a sha256e) Add the file modified timestamp and local datetime,"
+      "    after the filename, separated by DELIM."
       ""
       "-d DELIM"
       "    (Only with -a sha256e) Set metadata separator string to DELIM."
@@ -278,10 +279,12 @@
         done
       fi
       if [[ $opt_include_time == true ]]; then
+        FIND_PRINTF_FORMAT_TIMESTAMP='%T@'
+        FIND_PRINTF_FORMAT_DATETIME='%TFT%TT %TZ'
         if [[ -n $opt_column_sep ]]; then
-          findArgs+=(-printf '%p'"$opt_column_sep"'%TFT%TT %TZ\0');
+          findArgs+=(-printf '%p'"${opt_column_sep}${FIND_PRINTF_FORMAT_TIMESTAMP}${opt_column_sep}${FIND_PRINTF_FORMAT_DATETIME}"'\0');
         else
-          findArgs+=(-printf '%p\t%TFT%TT %TZ\0');
+          findArgs+=(-printf '%p\t'"${FIND_PRINTF_FORMAT_TIMESTAMP}"'\t'"${FIND_PRINTF_FORMAT_DATETIME}"'\0');
         fi
       else
         findArgs+=(-print0);

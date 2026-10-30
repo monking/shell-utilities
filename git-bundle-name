@@ -6,8 +6,8 @@
 # ...
 
 NAME=git-bundle-name
-VERSION=0.0.3
-MODIFIED=2026-07-01
+VERSION=0.0.4
+MODIFIED=2026-10-30
 
 makeBundleName()
 {
@@ -27,11 +27,12 @@ makeBundleName()
     gitRevArgs+=(HEAD)
   fi
   commitTimestamp="$(git "${gitFirstArgs[@]}" log -n 1 --pretty='%at' "${gitRevArgs[@]}")" || return
+  commitDate="$(date -u -d "@${commitTimestamp}" '+%Y-%m-%dZ')" || return
   commitHashes=($(git "${gitFirstArgs[@]}" rev-parse "${gitRevArgs[@]}")) || return
   lastCommitHash="${commitHashes[@]:$((${#commitHashes[@]}-1))}" || return
   repoPath="$(git "${gitFirstArgs[@]}" rev-parse --show-toplevel)" || return
   repoName="$(basename "$repoPath")" || return
-  bundleName="${repoName}--${commitTimestamp}--${lastCommitHash}.bundle"
+  bundleName="${repoName}--${commitDate}--${commitTimestamp}--${lastCommitHash}.bundle"
 
   if [[ $shouldShowFullPath == true ]]
   then
