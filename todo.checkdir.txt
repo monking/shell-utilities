@@ -1,0 +1,2 @@
+2026-04-20 The status of checkCommand is obscured by reading outputLine and subsequent echoes.  uuid:14601836-19ee-4744-8e0c-cd40cea53393
+2026-10-30 +BUG checkdir -e shows "Missing N files" while its working, but then ends with "All OK (N files)".  uuid:928adbc9-21aa-4f22-9c42-92da97354886
