@@ -11,8 +11,8 @@
 ## DOCUMENTATION:
 {
   SCRIPT_NAME=sumdir
-  SCRIPT_VERSION=0.3.7
-  SCRIPT_MODIFIED=2026-10-28
+  SCRIPT_VERSION=0.3.8
+  SCRIPT_MODIFIED=2026-11-04
   SCRIPT_USAGE="${0##*/} [OPTIONS] [PATH...]"
   SCRIPT_EXAMPLE_COLUMNS=(script description)
   SCRIPT_EXAMPLES=()
@@ -31,6 +31,9 @@
       "-h, --help, help"
       "    Show this help"
       ""
+      "-q, --quiet"
+      "    Don't show progress information."
+      ""
       "-a CMD"
       "    Hashing algorithm to use. Currently supported:"
       "    'sha256', 'b2', 'sha256e' (alias 'annex')."
@@ -48,7 +51,7 @@
       "    with -r. env: SUMDIR_SHOULD_SINGLE_HASH_FILE"
       ""
       "-o, --out TEMPLATE"
-      "    Output file name template."
+      "    Output file name template, or '-' to print to STDOUT."
       "    See 'TEMPLATES' below for substitution patterns."
       "    env: SUMDIR_OUTPUT_FILE_TEMPLATE"
       ""
@@ -187,6 +190,7 @@
         -L) opt_should_dereference=true;;
         -l) opt_should_include_location_in_output=true;;
         -o|--out) opt_output_file_template="$2"; shift;;
+        -q|--quiet) opt_verbose=-1;;
         -r) opt_should_recurse=true;;
         -vv) let opt_verbose+=2;;
         -vvv) let opt_verbose+=3;;
@@ -233,25 +237,32 @@
         continue;
       fi
 
-      if [[ $opt_should_single_hash_file == true ]]; then
+      if [[ $opt_should_single_hash_file == true && $opt_output_file_template != '-' ]]; then
         removeFilesByTemplate "$opt_output_file_template";
       fi
 
       local date="$(TZ="$opt_timezone" date "$opt_date_format")";
 
-      local outputPath="${opt_output_file_template/\{\}/$date}";
-      outputPath="${outputPath/\%d/$date}";
-      outputPath="${outputPath/\%a/$opt_algorithm}";
-      outputPath="${outputPath/\%A/${algoUpper}}";
-      if [[ $outputPath =~ / ]]; then
-        if [[ ${outputPath:0:1} != '/' ]]; then
-          outputPath="${cwd}/${outputPath}";
-        fi
+      local outputPath="$opt_output_file_template";
+      if [[ $outputPath == '-' ]]
+      then
+        outputFilename="STDOUT"
+        feedback 0 "Outputting to: STDOUT";
       else
-        outputPath="${PWD}/${outputPath}";
+        outputPath="${opt_output_file_template/\{\}/$date}";
+        outputPath="${outputPath/\%d/$date}";
+        outputPath="${outputPath/\%a/$opt_algorithm}";
+        outputPath="${outputPath/\%A/${algoUpper}}";
+        if [[ $outputPath =~ / ]]; then
+          if [[ ${outputPath:0:1} != '/' ]]; then
+            outputPath="${cwd}/${outputPath}";
+          fi
+        else
+          outputPath="${PWD}/${outputPath}";
+        fi
+        outputFilename="$(basename "$outputPath")"
+        feedback 0 "Outputting to: ${outputPath}";
       fi
-      outputFilename="$(basename "$outputPath")"
-      feedback 0 "Outputting to: ${outputPath}";
 
       local findArgs=();
       if [[ $opt_should_dereference == true ]]; then
@@ -267,7 +278,10 @@
       else
         findArgs+=(-type f);
       fi
-      findArgs+=(\! -name "$outputFilename");
+      if [[ $outputPath != '-' ]]
+      then
+        findArgs+=(\! -name "$outputFilename");
+      fi
       if [[ ${#opt_list_exclude_path[@]} -gt 0 ]]; then
         for pattern in "${opt_list_exclude_path[@]}"; do
           findArgs+=(\! -path "$pattern");
@@ -304,7 +318,10 @@
           echo "$colHeader";
         fi
         echo "# Same as:  ${sumCommand[*]} FILENAMES";
-        echo "# To check file integrity, run:  ${checkCommand[*]} ${outputFilename}";
+        if [[ $outputPath != '-' ]]
+        then
+          echo "# To check file integrity, run:  ${checkCommand[*]} ${outputFilename}";
+        fi
         local dirPath;
         if [[ $opt_should_include_location_in_output == true ]]; then
           dirPath="${PWD}"
@@ -324,9 +341,17 @@
           | sed -E 's/(^|\x00)\.\//\1/g' \
           | "${jobExecutor[@]}" "${sumCommand[@]}";
         # LATER Sort file list by path (`sort -k2`). todo.sumdir.txt#a0a942a5-d08d-469c-b572-ee8b3e8ae4ec
-      } > "${outputPath}";
+      } | {
+        if [[ $outputPath == '-' ]]
+        then
+          cat
+        else
+          cat > "${outputPath}";
+        fi
+      }
+
       local sumStatus=$?;
-      loglevel 0 && {
+      [[ $outputPath != '-' ]] && loglevel 0 && {
         >&2 echo -n "Generated: ";
         echo "${outputPath}"; # Output path, for scripting
       }
@@ -430,7 +455,8 @@
 
   initializeJobExecutor() {
     if command -v parallel &>/dev/null; then
-      jobExecutor=(parallel -0 --bar);
+      jobExecutor=(parallel -0);
+      loglevel 0 && jobExecutor+=(--bar);
     elif command -v xargs &>/dev/null; then
       jobExecutor=(xargsNulWrapper);
     else
